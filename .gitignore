@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Frontend
+node_modules/
+dist/
+build/
+
+# Editor and OS
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Generated outputs
+*.log
