@@ -20,3 +20,7 @@ Thumbs.db
 
 # Generated outputs
 *.log
+
+# Python packaging
+*.egg-info/
+.pytest_cache/
