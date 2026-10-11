@@ -24,3 +24,9 @@ Thumbs.db
 # Python packaging
 *.egg-info/
 .pytest_cache/
+
+# Local datasets
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
