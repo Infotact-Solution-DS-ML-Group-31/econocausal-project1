@@ -5,6 +5,7 @@ from typing import Any, Dict
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from src.api.config import settings, logger
+from src.api.routes.scoring import router as scoring_router
 
 
 def create_app() -> FastAPI:
@@ -34,6 +35,9 @@ def create_app() -> FastAPI:
         process_time = time.perf_counter() - start_time
         response.headers["X-Process-Time-Sec"] = f"{process_time:.6f}"
         return response
+
+    # Register API v1 routers
+    app.include_router(scoring_router)
 
     # Root endpoint
     @app.get("/", tags=["General"])
