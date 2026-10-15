@@ -1,6 +1,11 @@
-"""Unit tests for constraints and baseline heuristic solvers."""
-
+import sys
+from pathlib import Path
 import unittest
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import numpy as np
 from src.optimization.baseline import BlanketDiscountSolver, GreedyROISolver
 from src.optimization.constraints import prepare_feasible_inputs, validate_solver_inputs
