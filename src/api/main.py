@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from src.api.config import settings, logger
 from src.api.routes.scoring import router as scoring_router
+from src.api.routes.optimization import router as optimization_router
 
 
 def create_app() -> FastAPI:
@@ -38,6 +39,7 @@ def create_app() -> FastAPI:
 
     # Register API v1 routers
     app.include_router(scoring_router)
+    app.include_router(optimization_router)
 
     # Root endpoint
     @app.get("/", tags=["General"])
@@ -78,4 +80,4 @@ app = create_app()
 if __name__ == "__main__":
     import uvicorn
     logger.info(f"Starting server on {settings.host}:{settings.port}")
-    uvicorn.run("src.api.main:app", host=settings.host, port=settings.port, reload=settings.debug)
+    uvicorn.run("src.api.main:app", host=settings.host, port=settings.port, reload=settings.debug)

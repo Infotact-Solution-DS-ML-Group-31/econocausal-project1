@@ -74,3 +74,13 @@ class OptimizationResponse(BaseModel):
     total_customers_count: int
     allocations: List[CustomerAllocation]
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class PolicyComparisonResponse(BaseModel):
+    """Response comparing causal optimization policy against blanket discount baseline."""
+    budget: float
+    causal_scipy_policy: OptimizationResponse
+    blanket_baseline_policy: OptimizationResponse
+    net_profit_improvement: float
+    executive_summary: str
+
