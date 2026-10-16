@@ -6,12 +6,15 @@ import numpy as np
 
 from src.api.schemas import (
     CustomerAllocation,
+    DriftCheckRequest,
+    DriftCheckResponse,
     OptimizationRequest,
     OptimizationResponse,
     PolicyComparisonResponse,
 )
 from src.optimization.base import OptimizationResult
 from src.optimization.baseline import BlanketDiscountSolver
+from src.optimization.drift import evaluate_distribution_drift
 from src.optimization.solver import SciPyConstrainedSolver
 
 router = APIRouter(prefix="/api/v1", tags=["Optimization & Allocation"])
@@ -162,3 +165,33 @@ async def compare_policies(request: OptimizationRequest) -> Dict[str, Any]:
         "net_profit_improvement": net_profit_improvement,
         "executive_summary": summary,
     }
+
+
+@router.post(
+    "/drift-check",
+    response_model=DriftCheckResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Evaluate distribution drift between reference and current ITE distributions",
+)
+async def check_drift(request: DriftCheckRequest) -> DriftCheckResponse:
+    """Evaluate covariate and treatment effect distribution drift using PSI and KS-2sample test."""
+    ref_arr = np.array(request.reference_ites, dtype=np.float64)
+    cur_arr = np.array(request.current_ites, dtype=np.float64)
+
+    report = evaluate_distribution_drift(
+        reference=ref_arr,
+        current=cur_arr,
+        psi_threshold=request.psi_threshold,
+        ks_alpha=request.ks_alpha,
+    )
+
+    return DriftCheckResponse(
+        drift_detected=report.drift_detected,
+        severity=report.severity,
+        psi_score=report.psi_score,
+        ks_statistic=report.ks_statistic,
+        ks_pvalue=report.ks_pvalue,
+        recommendation=report.recommendation,
+        reference_count=len(request.reference_ites),
+        current_count=len(request.current_ites),
+    )

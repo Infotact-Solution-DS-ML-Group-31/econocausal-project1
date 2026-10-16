@@ -7,6 +7,11 @@ from src.optimization.constraints import (
     prepare_feasible_inputs,
     validate_solver_inputs,
 )
+from src.optimization.drift import (
+    DriftReport,
+    calculate_psi,
+    evaluate_distribution_drift,
+)
 from src.optimization.solver import SciPyConstrainedSolver
 
 __all__ = [
@@ -18,4 +23,7 @@ __all__ = [
     "prepare_feasible_inputs",
     "validate_solver_inputs",
     "SciPyConstrainedSolver",
+    "DriftReport",
+    "calculate_psi",
+    "evaluate_distribution_drift",
 ]

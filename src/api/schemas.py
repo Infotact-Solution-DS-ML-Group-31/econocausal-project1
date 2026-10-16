@@ -83,4 +83,33 @@ class PolicyComparisonResponse(BaseModel):
     blanket_baseline_policy: OptimizationResponse
     net_profit_improvement: float
     executive_summary: str
+
+
+class DriftCheckRequest(BaseModel):
+    """Payload to evaluate distribution drift between reference and current ITE scores."""
+    reference_ites: List[float] = Field(
+        ..., min_length=5, description="Historical reference treatment effect distribution"
+    )
+    current_ites: List[float] = Field(
+        ..., min_length=5, description="Current scoring batch treatment effect distribution"
+    )
+    psi_threshold: float = Field(
+        default=0.25, gt=0.0, description="PSI threshold for critical distribution drift"
+    )
+    ks_alpha: float = Field(
+        default=0.05, gt=0.0, lt=1.0, description="Significance level alpha for Kolmogorov-Smirnov test"
+    )
+
+
+class DriftCheckResponse(BaseModel):
+    """Statistical distribution drift evaluation report."""
+    drift_detected: bool
+    severity: str
+    psi_score: float
+    ks_statistic: float
+    ks_pvalue: float
+    recommendation: str
+    reference_count: int
+    current_count: int
+
 
