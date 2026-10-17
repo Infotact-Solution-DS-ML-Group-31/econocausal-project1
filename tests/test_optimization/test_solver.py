@@ -165,6 +165,79 @@ class TestSciPyConstrainedSolver(unittest.TestCase):
         self.assertAlmostEqual(res.total_spend, 15.0, places=4)
         np.testing.assert_allclose(res.allocations, np.array([1.0, 0.5]), atol=1e-5)
 
+    def test_2d_multi_tier_discount_selection(self):
+        """Test a 5-customer, 2-tier ($10 and $20) matrix with mutual exclusivity under budget."""
+        # 5 customers, 2 tiers: $10 and $20
+        # Customer 0: higher net profit at $10 (0.30*100-10=20 vs 0.35*100-20=15)
+        # Customer 1: higher net profit at $20 (0.20*100-10=10 vs 0.45*100-20=25)
+        # Customer 2: Sleeping Dog (negative uplift: -0.10, -0.15)
+        # Customer 3: Unprofitable (0.05*100-10=-5, 0.08*100-20=-12)
+        # Customer 4: prefers $10 (0.25*100-10=15 vs 0.30*100-20=10)
+        te = np.array([
+            [0.30, 0.35],
+            [0.20, 0.45],
+            [-0.10, -0.15],
+            [0.05, 0.08],
+            [0.25, 0.30],
+        ])
+        tc = np.array([10.0, 20.0])
+        cv = np.array([100.0, 100.0, 100.0, 100.0, 100.0])
+        budget = 40.0
+
+        solver = SciPyConstrainedSolver(
+            budget=budget,
+            objective=OptimizationObjective.MAXIMIZE_PROFIT,
+            integer_rounding=True,
+        )
+        res = solver.solve(te, tc, customer_values=cv)
+
+        self.assertTrue(res.success)
+        self.assertEqual(res.allocations.shape, (5, 2))
+        self.assertTrue(np.all(res.allocations.sum(axis=1) <= 1))
+        self.assertEqual(res.allocations[0, 0], 1)
+        self.assertEqual(res.allocations[1, 1], 1)
+        self.assertEqual(res.allocations[4, 0], 1)
+        self.assertLessEqual(res.total_spend, 40.0)
+        self.assertEqual(res.total_spend, 40.0)
+        self.assertEqual(res.metadata["targeted_count"], 3)
+        self.assertEqual(res.metadata["expected_net_profit"], 60.0)
+
+    def test_2d_zero_and_small_budget_edge_cases(self):
+        """Verify graceful handling when budget is zero or below minimum tier cost for 2D inputs."""
+        te = np.array([
+            [0.30, 0.35],
+            [0.20, 0.45],
+            [-0.10, -0.15],
+            [0.05, 0.08],
+            [0.25, 0.30],
+        ])
+        tc = np.array([10.0, 20.0])
+        cv = np.array([100.0, 100.0, 100.0, 100.0, 100.0])
+
+        # Budget = 0.0
+        solver_zero = SciPyConstrainedSolver(budget=0.0)
+        res_zero = solver_zero.solve(te, tc, customer_values=cv)
+        self.assertTrue(res_zero.success)
+        self.assertEqual(res_zero.allocations.shape, (5, 2))
+        self.assertEqual(res_zero.total_spend, 0.0)
+        self.assertEqual(res_zero.expected_incremental_revenue, 0.0)
+        self.assertEqual(res_zero.metadata["targeted_count"], 0)
+        self.assertEqual(res_zero.metadata["expected_net_profit"], 0.0)
+        np.testing.assert_array_equal(res_zero.allocations, np.zeros((5, 2), dtype=np.int32))
+
+        # Budget below minimum tier cost (budget = 5.0 < min(10.0, 20.0))
+        solver_small = SciPyConstrainedSolver(budget=5.0)
+        res_small = solver_small.solve(te, tc, customer_values=cv)
+        self.assertTrue(res_small.success)
+        self.assertIn("Budget below minimum treatment cost; zero allocations made", res_small.status_message)
+        self.assertEqual(res_small.allocations.shape, (5, 2))
+        self.assertEqual(res_small.total_spend, 0.0)
+        self.assertEqual(res_small.expected_incremental_revenue, 0.0)
+        self.assertEqual(res_small.metadata["targeted_count"], 0)
+        self.assertEqual(res_small.metadata["expected_net_profit"], 0.0)
+        np.testing.assert_array_equal(res_small.allocations, np.zeros((5, 2), dtype=np.int32))
+
 
 if __name__ == "__main__":
     unittest.main()
+

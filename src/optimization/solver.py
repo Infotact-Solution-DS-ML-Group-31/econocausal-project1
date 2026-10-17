@@ -40,19 +40,20 @@ class SciPyConstrainedSolver(BaseAllocationSolver):
         """Execute linear programming optimization over eligible customers.
 
         Args:
-            treatment_effects: Array of predicted ITE (uplift delta) values.
-            treatment_costs: Array of promotional discount costs per customer.
+            treatment_effects: Array of predicted ITE (uplift delta) values (1D or 2D).
+            treatment_costs: Array of promotional discount costs per customer or tier.
             customer_ids: Optional array of customer identifiers.
             customer_values: Array of customer baseline values (e.g., AOV or LTV).
                 Defaults to $50.0 per customer if not provided.
 
         Returns:
-            OptimizationResult containing allocation vector, financial metrics, and metadata.
+            OptimizationResult containing allocation vector or matrix, financial metrics, and metadata.
         """
+        te_arr = np.asarray(treatment_effects, dtype=np.float64)
         cv = (
             np.asarray(customer_values, dtype=np.float64)
             if customer_values is not None
-            else np.ones_like(np.asarray(treatment_effects, dtype=np.float64)) * 50.0
+            else np.full(te_arr.shape[0], 50.0, dtype=np.float64)
         )
 
         feasible = prepare_feasible_inputs(
@@ -67,120 +68,257 @@ class SciPyConstrainedSolver(BaseAllocationSolver):
         tc = feasible.treatment_costs
         cv = feasible.customer_values
 
-        if te.ndim != 1:
-            raise ValueError("SciPyConstrainedSolver currently supports 1D treatment vectors.")
+        if te.ndim == 1:
+            allocations = np.zeros(te.shape[0], dtype=np.int32 if self.integer_rounding else np.float64)
+            eligible_idx = np.where(feasible.eligible_mask)[0]
 
-        allocations = np.zeros(te.shape[0], dtype=np.int32 if self.integer_rounding else np.float64)
-        eligible_idx = np.where(feasible.eligible_mask)[0]
-
-        # Edge case 1: Zero eligible candidates or non-positive budget
-        if eligible_idx.size == 0 or self.budget <= 0.0:
-            return OptimizationResult(
-                success=True,
-                status_message="No eligible candidates or zero budget; zero allocations made",
-                total_spend=0.0,
-                expected_incremental_revenue=0.0,
-                allocations=allocations,
-                metadata={
-                    "solver": "SciPyConstrainedSolver (HiGHS)",
-                    "objective": self.objective.value,
-                    "targeted_count": 0,
-                    "expected_net_profit": 0.0,
-                    "status": "No eligible candidates or zero budget; zero allocations made",
-                },
-            )
-
-        # Edge case 2: Budget below minimum eligible treatment cost
-        eligible_costs = tc[eligible_idx]
-        if eligible_costs.size > 0 and self.budget < float(np.min(eligible_costs)):
-            return OptimizationResult(
-                success=True,
-                status_message="Budget below minimum treatment cost; zero allocations made",
-                total_spend=0.0,
-                expected_incremental_revenue=0.0,
-                allocations=allocations,
-                metadata={
-                    "solver": "SciPyConstrainedSolver (HiGHS)",
-                    "objective": self.objective.value,
-                    "targeted_count": 0,
-                    "expected_net_profit": 0.0,
-                    "status": "Budget below minimum treatment cost; zero allocations made",
-                },
-            )
-
-        # Formulate objective weights w_i
-        if self.objective == OptimizationObjective.MAXIMIZE_PROFIT:
-            weights = feasible.net_expected_profits[eligible_idx]
-        elif self.objective == OptimizationObjective.MAXIMIZE_REVENUE:
-            weights = (te * cv)[eligible_idx]
-        elif self.objective == OptimizationObjective.MAXIMIZE_CONVERSIONS:
-            weights = te[eligible_idx]
-        else:
-            raise ValueError(f"Unsupported optimization objective: {self.objective}")
-
-        # Linear programming setup: min c^T x s.t. A_ub x <= b_ub, 0 <= x <= 1
-        c = -weights
-        A_ub = tc[eligible_idx].reshape(1, -1)
-        b_ub = [self.budget]
-        bounds = [(0.0, 1.0)]
-
-        opt_res = linprog(c=c, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method="highs")
-
-        if not opt_res.success:
-            return OptimizationResult(
-                success=False,
-                status_message=f"LP optimization failed: {opt_res.message}",
-                total_spend=0.0,
-                expected_incremental_revenue=0.0,
-                allocations=allocations,
-                metadata={
-                    "solver": "SciPyConstrainedSolver (HiGHS)",
-                    "objective": self.objective.value,
-                    "targeted_count": 0,
-                    "expected_net_profit": 0.0,
-                    "status": opt_res.message,
-                },
-            )
-
-        x_sol = opt_res.x
-        safe_costs = np.where(eligible_costs > 0, eligible_costs, 1e-9)
-        efficiency = weights / safe_costs
-
-        if self.integer_rounding:
-            pos_mask = x_sol > 1e-6
-            if np.any(pos_mask):
-                pos_indices = np.where(pos_mask)[0]
-                # Sort positive LP solutions by (-x_sol, -efficiency)
-                sorted_indices = sorted(
-                    pos_indices,
-                    key=lambda i: (-float(x_sol[i]), -float(efficiency[i])),
+            # Edge case 1: Zero eligible candidates or non-positive budget
+            if eligible_idx.size == 0 or self.budget <= 0.0:
+                return OptimizationResult(
+                    success=True,
+                    status_message="No eligible candidates or zero budget; zero allocations made",
+                    total_spend=0.0,
+                    expected_incremental_revenue=0.0,
+                    allocations=allocations,
+                    metadata={
+                        "solver": "SciPyConstrainedSolver (HiGHS)",
+                        "objective": self.objective.value,
+                        "targeted_count": 0,
+                        "expected_net_profit": 0.0,
+                        "status": "No eligible candidates or zero budget; zero allocations made",
+                    },
                 )
-                total_spend = 0.0
-                for i in sorted_indices:
-                    orig_idx = eligible_idx[i]
-                    cost = float(tc[orig_idx])
-                    if total_spend + cost <= self.budget:
-                        allocations[orig_idx] = 1
-                        total_spend += cost
+
+            # Edge case 2: Budget below minimum eligible treatment cost
+            eligible_costs = tc[eligible_idx]
+            if eligible_costs.size > 0 and self.budget < float(np.min(eligible_costs)):
+                return OptimizationResult(
+                    success=True,
+                    status_message="Budget below minimum treatment cost; zero allocations made",
+                    total_spend=0.0,
+                    expected_incremental_revenue=0.0,
+                    allocations=allocations,
+                    metadata={
+                        "solver": "SciPyConstrainedSolver (HiGHS)",
+                        "objective": self.objective.value,
+                        "targeted_count": 0,
+                        "expected_net_profit": 0.0,
+                        "status": "Budget below minimum treatment cost; zero allocations made",
+                    },
+                )
+
+            # Formulate objective weights w_i
+            if self.objective == OptimizationObjective.MAXIMIZE_PROFIT:
+                weights = feasible.net_expected_profits[eligible_idx]
+            elif self.objective == OptimizationObjective.MAXIMIZE_REVENUE:
+                weights = (te * cv)[eligible_idx]
+            elif self.objective == OptimizationObjective.MAXIMIZE_CONVERSIONS:
+                weights = te[eligible_idx]
             else:
+                raise ValueError(f"Unsupported optimization objective: {self.objective}")
+
+            # Linear programming setup: min c^T x s.t. A_ub x <= b_ub, 0 <= x <= 1
+            c = -weights
+            A_ub = tc[eligible_idx].reshape(1, -1)
+            b_ub = [self.budget]
+            bounds = [(0.0, 1.0)]
+
+            opt_res = linprog(c=c, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method="highs")
+
+            if not opt_res.success:
+                return OptimizationResult(
+                    success=False,
+                    status_message=f"LP optimization failed: {opt_res.message}",
+                    total_spend=0.0,
+                    expected_incremental_revenue=0.0,
+                    allocations=allocations,
+                    metadata={
+                        "solver": "SciPyConstrainedSolver (HiGHS)",
+                        "objective": self.objective.value,
+                        "targeted_count": 0,
+                        "expected_net_profit": 0.0,
+                        "status": opt_res.message,
+                    },
+                )
+
+            x_sol = opt_res.x
+            safe_costs = np.where(eligible_costs > 0, eligible_costs, 1e-9)
+            efficiency = weights / safe_costs
+
+            if self.integer_rounding:
+                pos_mask = x_sol > 1e-6
+                if np.any(pos_mask):
+                    pos_indices = np.where(pos_mask)[0]
+                    # Sort positive LP solutions by (-x_sol, -efficiency)
+                    sorted_indices = sorted(
+                        pos_indices,
+                        key=lambda i: (-float(x_sol[i]), -float(efficiency[i])),
+                    )
+                    total_spend = 0.0
+                    for i in sorted_indices:
+                        orig_idx = eligible_idx[i]
+                        cost = float(tc[orig_idx])
+                        if total_spend + cost <= self.budget:
+                            allocations[orig_idx] = 1
+                            total_spend += cost
+                else:
+                    total_spend = 0.0
+            else:
+                allocations[eligible_idx] = x_sol
+                total_spend = float(np.sum(allocations * tc))
+
+            inc_rev = float(np.sum((te * cv) * allocations))
+            net_profit = inc_rev - total_spend
+
+            return OptimizationResult(
+                success=True,
+                status_message="Constrained LP optimization completed",
+                total_spend=round(total_spend, 4),
+                expected_incremental_revenue=round(inc_rev, 4),
+                allocations=allocations,
+                metadata={
+                    "solver": "SciPyConstrainedSolver (HiGHS)",
+                    "objective": self.objective.value,
+                    "targeted_count": int(np.sum(allocations > 0)),
+                    "expected_net_profit": round(net_profit, 4),
+                },
+            )
+
+        elif te.ndim == 2:
+            N, K = te.shape
+            if tc.ndim == 1:
+                tc_2d = np.broadcast_to(tc, (N, K)).copy()
+            else:
+                tc_2d = tc
+
+            allocations = np.zeros((N, K), dtype=np.int32 if self.integer_rounding else np.float64)
+            eligible_pairs = np.argwhere(feasible.eligible_mask)
+
+            # Edge case 1: Zero eligible candidates or non-positive budget
+            if eligible_pairs.shape[0] == 0 or self.budget <= 0.0:
+                return OptimizationResult(
+                    success=True,
+                    status_message="No eligible candidates or zero budget; zero allocations made",
+                    total_spend=0.0,
+                    expected_incremental_revenue=0.0,
+                    allocations=allocations,
+                    metadata={
+                        "solver": "SciPyConstrainedSolver (HiGHS)",
+                        "objective": self.objective.value,
+                        "targeted_count": 0,
+                        "expected_net_profit": 0.0,
+                        "status": "No eligible candidates or zero budget; zero allocations made",
+                    },
+                )
+
+            rows = eligible_pairs[:, 0]
+            cols = eligible_pairs[:, 1]
+            eligible_costs = tc_2d[rows, cols]
+
+            # Edge case 2: Budget below minimum eligible treatment cost
+            if eligible_costs.size > 0 and self.budget < float(np.min(eligible_costs)):
+                return OptimizationResult(
+                    success=True,
+                    status_message="Budget below minimum treatment cost; zero allocations made",
+                    total_spend=0.0,
+                    expected_incremental_revenue=0.0,
+                    allocations=allocations,
+                    metadata={
+                        "solver": "SciPyConstrainedSolver (HiGHS)",
+                        "objective": self.objective.value,
+                        "targeted_count": 0,
+                        "expected_net_profit": 0.0,
+                        "status": "Budget below minimum treatment cost; zero allocations made",
+                    },
+                )
+
+            # Formulate objective weights w_m
+            inc_rev_matrix = te * (cv[:, np.newaxis] if cv.ndim == 1 else cv)
+            if self.objective == OptimizationObjective.MAXIMIZE_PROFIT:
+                weights = feasible.net_expected_profits[rows, cols]
+            elif self.objective == OptimizationObjective.MAXIMIZE_REVENUE:
+                weights = inc_rev_matrix[rows, cols]
+            elif self.objective == OptimizationObjective.MAXIMIZE_CONVERSIONS:
+                weights = te[rows, cols]
+            else:
+                raise ValueError(f"Unsupported optimization objective: {self.objective}")
+
+            # Linear programming setup: min c^T x s.t. A_ub x <= b_ub, 0 <= x <= 1
+            c_lp = -weights
+            M = eligible_pairs.shape[0]
+            unique_customers = np.unique(rows)
+            U = len(unique_customers)
+
+            A_ub = np.zeros((1 + U, M), dtype=np.float64)
+            A_ub[0, :] = eligible_costs
+            b_ub = [self.budget] + [1.0] * U
+
+            for u, cust_id in enumerate(unique_customers):
+                A_ub[1 + u, rows == cust_id] = 1.0
+
+            opt_res = linprog(c=c_lp, A_ub=A_ub, b_ub=b_ub, bounds=(0.0, 1.0), method="highs")
+
+            if not opt_res.success:
+                return OptimizationResult(
+                    success=False,
+                    status_message=f"LP optimization failed: {opt_res.message}",
+                    total_spend=0.0,
+                    expected_incremental_revenue=0.0,
+                    allocations=allocations,
+                    metadata={
+                        "solver": "SciPyConstrainedSolver (HiGHS)",
+                        "objective": self.objective.value,
+                        "targeted_count": 0,
+                        "expected_net_profit": 0.0,
+                        "status": opt_res.message,
+                    },
+                )
+
+            x_sol = opt_res.x
+            safe_costs = np.where(eligible_costs > 0, eligible_costs, 1e-9)
+            efficiency = weights / safe_costs
+
+            if self.integer_rounding:
+                pos_mask = x_sol > 1e-6
                 total_spend = 0.0
+                if np.any(pos_mask):
+                    pos_indices = np.where(pos_mask)[0]
+                    # Sort positive LP solutions by (-x_sol, -efficiency)
+                    sorted_indices = sorted(
+                        pos_indices,
+                        key=lambda m: (-float(x_sol[m]), -float(efficiency[m])),
+                    )
+                    assigned_customers = set()
+                    for m in sorted_indices:
+                        i = int(rows[m])
+                        k = int(cols[m])
+                        cost = float(eligible_costs[m])
+                        if i not in assigned_customers and total_spend + cost <= self.budget:
+                            allocations[i, k] = 1
+                            assigned_customers.add(i)
+                            total_spend += cost
+                else:
+                    total_spend = 0.0
+            else:
+                allocations[rows, cols] = x_sol
+                total_spend = float(np.sum(allocations * tc_2d))
+
+            inc_rev = float(np.sum(inc_rev_matrix * allocations))
+            net_profit = inc_rev - total_spend
+
+            return OptimizationResult(
+                success=True,
+                status_message="Constrained LP optimization completed",
+                total_spend=round(total_spend, 4),
+                expected_incremental_revenue=round(inc_rev, 4),
+                allocations=allocations,
+                metadata={
+                    "solver": "SciPyConstrainedSolver (HiGHS)",
+                    "objective": self.objective.value,
+                    "targeted_count": int(np.sum(allocations > 0)),
+                    "expected_net_profit": round(net_profit, 4),
+                },
+            )
+
         else:
-            allocations[eligible_idx] = x_sol
-            total_spend = float(np.sum(allocations * tc))
-
-        inc_rev = float(np.sum((te * cv) * allocations))
-        net_profit = inc_rev - total_spend
-
-        return OptimizationResult(
-            success=True,
-            status_message="Constrained LP optimization completed",
-            total_spend=round(total_spend, 4),
-            expected_incremental_revenue=round(inc_rev, 4),
-            allocations=allocations,
-            metadata={
-                "solver": "SciPyConstrainedSolver (HiGHS)",
-                "objective": self.objective.value,
-                "targeted_count": int(np.sum(allocations > 0)),
-                "expected_net_profit": round(net_profit, 4),
-            },
-        )
+            raise ValueError(f"Unsupported treatment_effects dimensionality: {te.ndim}D (expected 1D or 2D).")
