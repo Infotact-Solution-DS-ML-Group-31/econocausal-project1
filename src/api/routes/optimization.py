@@ -8,6 +8,7 @@ from src.api.schemas import (
     CustomerAllocation,
     DriftCheckRequest,
     DriftCheckResponse,
+    MultiTierOptimizationRequest,
     OptimizationRequest,
     OptimizationResponse,
     PolicyComparisonResponse,
@@ -76,6 +77,72 @@ def _build_optimization_response(
     )
 
 
+def _build_multi_tier_optimization_response(
+    request: MultiTierOptimizationRequest,
+    result: OptimizationResult,
+    te: np.ndarray,
+    tc: np.ndarray,
+    cv: np.ndarray,
+) -> OptimizationResponse:
+    """Helper to convert an OptimizationResult and multi-tier request into an OptimizationResponse."""
+    customer_allocations: List[CustomerAllocation] = []
+    allocations_matrix = result.allocations  # shape (N, K)
+
+    for i, c in enumerate(request.customers):
+        row_alloc = allocations_matrix[i]
+        selected_tier_indices = np.where(row_alloc > 0)[0]
+        if len(selected_tier_indices) > 0:
+            k = int(selected_tier_indices[0])
+            alloc_val = float(row_alloc[k])
+            is_targeted = True
+            assigned_discount = float(tc[k] * alloc_val)
+            exp_inc_rev = float((te[i, k] * cv[i]) * alloc_val)
+            exp_net_profit = float(exp_inc_rev - assigned_discount)
+        else:
+            is_targeted = False
+            assigned_discount = 0.0
+            exp_inc_rev = 0.0
+            exp_net_profit = 0.0
+
+        customer_allocations.append(
+            CustomerAllocation(
+                customer_id=c.customer_id,
+                assigned_discount=round(assigned_discount, 4),
+                is_targeted=is_targeted,
+                expected_incremental_revenue=round(exp_inc_rev, 4),
+                expected_net_profit=round(exp_net_profit, 4),
+            )
+        )
+
+    budget_util_pct = (
+        round((result.total_spend / request.budget) * 100.0, 2)
+        if request.budget > 0
+        else 0.0
+    )
+    net_profit = float(
+        result.metadata.get(
+            "expected_net_profit",
+            result.expected_incremental_revenue - result.total_spend,
+        )
+    )
+
+    return OptimizationResponse(
+        success=result.success,
+        status_message=result.status_message,
+        total_budget=round(float(request.budget), 4),
+        total_spend=round(float(result.total_spend), 4),
+        budget_utilization_pct=budget_util_pct,
+        total_expected_incremental_revenue=round(float(result.expected_incremental_revenue), 4),
+        total_expected_net_profit=round(net_profit, 4),
+        targeted_customers_count=int(
+            result.metadata.get("targeted_count", np.sum(np.any(allocations_matrix > 0, axis=1)))
+        ),
+        total_customers_count=len(request.customers),
+        allocations=customer_allocations,
+        metadata=result.metadata,
+    )
+
+
 @router.post(
     "/allocate",
     response_model=OptimizationResponse,
@@ -103,6 +170,37 @@ async def allocate_budget(request: OptimizationRequest) -> OptimizationResponse:
     )
 
     return _build_optimization_response(request, result)
+
+
+@router.post(
+    "/allocate-multi-tier",
+    response_model=OptimizationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Compute optimal multi-tier discount allocation under budget constraints",
+)
+async def allocate_multi_tier_budget(
+    request: MultiTierOptimizationRequest,
+) -> OptimizationResponse:
+    """Execute SciPy-constrained linear programming optimization for multi-tier discount allocation."""
+    customer_ids = np.array([c.customer_id for c in request.customers])
+    te = np.array([c.tier_ites for c in request.customers], dtype=np.float64)
+    tc = np.array(request.tier_costs, dtype=np.float64)
+    cv = np.array([c.customer_value for c in request.customers], dtype=np.float64)
+
+    solver = SciPyConstrainedSolver(
+        budget=request.budget,
+        objective=request.objective,
+        min_spend_per_user=request.min_spend_per_user,
+        integer_rounding=True,
+    )
+    result = solver.solve(
+        treatment_effects=te,
+        treatment_costs=tc,
+        customer_ids=customer_ids,
+        customer_values=cv,
+    )
+
+    return _build_multi_tier_optimization_response(request, result, te, tc, cv)
 
 
 @router.post(

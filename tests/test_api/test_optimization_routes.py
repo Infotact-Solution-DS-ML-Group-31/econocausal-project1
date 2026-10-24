@@ -125,6 +125,179 @@ class TestOptimizationRoutes(unittest.TestCase):
         )
         self.assertEqual(res2.status_code, 422)
 
+    def test_allocate_multi_tier_endpoint_success(self):
+        """POST /api/v1/allocate-multi-tier returns 200, respects budget and mutual exclusivity."""
+        budget = 40.0
+        payload = {
+            "budget": budget,
+            "tier_costs": [10.0, 20.0],
+            "objective": "maximize_profit",
+            "customers": [
+                {
+                    "customer_id": "cust_1",
+                    "baseline_conversion_prob": 0.10,
+                    "tier_ites": [0.30, 0.35],
+                    "customer_value": 100.0,
+                },
+                {
+                    "customer_id": "cust_2",
+                    "baseline_conversion_prob": 0.15,
+                    "tier_ites": [0.20, 0.45],
+                    "customer_value": 100.0,
+                },
+                {
+                    "customer_id": "cust_3",
+                    "baseline_conversion_prob": 0.05,
+                    "tier_ites": [-0.10, -0.15],
+                    "customer_value": 100.0,
+                },
+                {
+                    "customer_id": "cust_4",
+                    "baseline_conversion_prob": 0.20,
+                    "tier_ites": [0.05, 0.08],
+                    "customer_value": 100.0,
+                },
+                {
+                    "customer_id": "cust_5",
+                    "baseline_conversion_prob": 0.12,
+                    "tier_ites": [0.25, 0.30],
+                    "customer_value": 100.0,
+                },
+            ],
+        }
+
+        response = self.client.post("/api/v1/allocate-multi-tier", json=payload)
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["total_budget"], budget)
+        self.assertLessEqual(data["total_spend"], budget)
+        self.assertEqual(data["total_spend"], 40.0)
+        self.assertEqual(data["total_customers_count"], 5)
+        self.assertEqual(len(data["allocations"]), 5)
+        self.assertEqual(data["targeted_customers_count"], 3)
+        self.assertEqual(data["metadata"]["objective"], "maximize_profit")
+
+        # Verify mutual exclusivity: Each customer receives at most one tier
+        allocations_by_id = {a["customer_id"]: a for a in data["allocations"]}
+        
+        # cust_1 prefers $10 tier (profit 20 > 15)
+        self.assertTrue(allocations_by_id["cust_1"]["is_targeted"])
+        self.assertEqual(allocations_by_id["cust_1"]["assigned_discount"], 10.0)
+        self.assertEqual(allocations_by_id["cust_1"]["expected_incremental_revenue"], 30.0)
+        self.assertEqual(allocations_by_id["cust_1"]["expected_net_profit"], 20.0)
+
+        # cust_2 prefers $20 tier (profit 25 > 10)
+        self.assertTrue(allocations_by_id["cust_2"]["is_targeted"])
+        self.assertEqual(allocations_by_id["cust_2"]["assigned_discount"], 20.0)
+        self.assertEqual(allocations_by_id["cust_2"]["expected_incremental_revenue"], 45.0)
+        self.assertEqual(allocations_by_id["cust_2"]["expected_net_profit"], 25.0)
+
+        # cust_3 is a sleeping dog (negative uplift) -> untargeted
+        self.assertFalse(allocations_by_id["cust_3"]["is_targeted"])
+        self.assertEqual(allocations_by_id["cust_3"]["assigned_discount"], 0.0)
+
+        # cust_4 is unprofitable -> untargeted
+        self.assertFalse(allocations_by_id["cust_4"]["is_targeted"])
+        self.assertEqual(allocations_by_id["cust_4"]["assigned_discount"], 0.0)
+
+        # cust_5 prefers $10 tier (profit 15 > 10)
+        self.assertTrue(allocations_by_id["cust_5"]["is_targeted"])
+        self.assertEqual(allocations_by_id["cust_5"]["assigned_discount"], 10.0)
+        self.assertEqual(allocations_by_id["cust_5"]["expected_incremental_revenue"], 25.0)
+        self.assertEqual(allocations_by_id["cust_5"]["expected_net_profit"], 15.0)
+
+        # Assert all assigned discounts are exclusively in {0.0, 10.0, 20.0}
+        for alloc in data["allocations"]:
+            self.assertIn(alloc["assigned_discount"], [0.0, 10.0, 20.0])
+            if alloc["is_targeted"]:
+                self.assertGreater(alloc["assigned_discount"], 0.0)
+            else:
+                self.assertEqual(alloc["assigned_discount"], 0.0)
+
+    def test_allocate_multi_tier_validation_errors(self):
+        """Invalid requests (mismatched tier lengths, duplicate customer IDs, non-positive budget) return 422."""
+        # 1. Mismatched tier_ites length vs tier_costs length
+        mismatched_payload = {
+            "budget": 50.0,
+            "tier_costs": [10.0, 20.0],
+            "customers": [
+                {
+                    "customer_id": "cust_mismatch",
+                    "baseline_conversion_prob": 0.1,
+                    "tier_ites": [0.15],  # 1 tier given, expected 2
+                    "customer_value": 50.0,
+                }
+            ],
+        }
+        res_mismatch = self.client.post("/api/v1/allocate-multi-tier", json=mismatched_payload)
+        self.assertEqual(res_mismatch.status_code, 422)
+
+        # 2. Duplicate customer IDs
+        dup_payload = {
+            "budget": 50.0,
+            "tier_costs": [10.0, 20.0],
+            "customers": [
+                {
+                    "customer_id": "cust_dup",
+                    "baseline_conversion_prob": 0.1,
+                    "tier_ites": [0.15, 0.25],
+                    "customer_value": 50.0,
+                },
+                {
+                    "customer_id": "cust_dup",
+                    "baseline_conversion_prob": 0.2,
+                    "tier_ites": [0.10, 0.20],
+                    "customer_value": 50.0,
+                },
+            ],
+        }
+        res_dup = self.client.post("/api/v1/allocate-multi-tier", json=dup_payload)
+        self.assertEqual(res_dup.status_code, 422)
+
+        # 3. Non-positive budget
+        res_zero_budget = self.client.post(
+            "/api/v1/allocate-multi-tier",
+            json={
+                "budget": 0.0,
+                "tier_costs": [10.0, 20.0],
+                "customers": [
+                    {
+                        "customer_id": "c1",
+                        "baseline_conversion_prob": 0.1,
+                        "tier_ites": [0.1, 0.2],
+                    }
+                ],
+            },
+        )
+        self.assertEqual(res_zero_budget.status_code, 422)
+
+    def test_allocate_multi_tier_budget_below_min_cost(self):
+        """Budget below minimum tier cost returns zero allocations without failure."""
+        payload = {
+            "budget": 5.0,  # Below min tier cost of 10.0
+            "tier_costs": [10.0, 20.0],
+            "objective": "maximize_profit",
+            "customers": [
+                {
+                    "customer_id": "cust_1",
+                    "baseline_conversion_prob": 0.10,
+                    "tier_ites": [0.30, 0.35],
+                    "customer_value": 100.0,
+                }
+            ],
+        }
+        response = self.client.post("/api/v1/allocate-multi-tier", json=payload)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["total_spend"], 0.0)
+        self.assertEqual(data["targeted_customers_count"], 0)
+        self.assertIn("Budget below minimum treatment cost", data["status_message"])
+        self.assertEqual(data["allocations"][0]["assigned_discount"], 0.0)
+        self.assertFalse(data["allocations"][0]["is_targeted"])
+
 
 if __name__ == "__main__":
     unittest.main()

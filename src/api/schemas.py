@@ -2,7 +2,7 @@
 
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class OptimizationObjective(str, Enum):
@@ -50,6 +50,59 @@ class OptimizationRequest(BaseModel):
         if len(ids) != len(set(ids)):
             raise ValueError("Duplicate customer_id detected in customer payload.")
         return v
+
+
+class MultiTierCustomerDataPoint(BaseModel):
+    """Customer-level multi-treatment effect scores across discount tiers."""
+    customer_id: str = Field(..., description="Unique customer identifier")
+    baseline_conversion_prob: float = Field(
+        ..., ge=0.0, le=1.0, description="Predicted baseline conversion without discount"
+    )
+    tier_ites: List[float] = Field(
+        ..., min_length=1, description="Predicted ITE for each discount tier (e.g., [$10_ite, $20_ite])"
+    )
+    customer_value: float = Field(
+        default=50.0, gt=0.0, description="Expected average order value or customer lifetime value"
+    )
+
+
+class MultiTierOptimizationRequest(BaseModel):
+    """Payload submitted to allocate budget across multiple discount tiers."""
+    budget: float = Field(..., gt=0.0, description="Total available campaign budget")
+    tier_costs: List[float] = Field(
+        ..., min_length=1, description="Cost for each discount tier (e.g., [10.0, 20.0])"
+    )
+    objective: OptimizationObjective = Field(
+        default=OptimizationObjective.MAXIMIZE_PROFIT,
+        description="Target business objective",
+    )
+    min_spend_per_user: float = Field(
+        default=0.0, ge=0.0, description="Minimum subsidy per targeted user"
+    )
+    customers: List[MultiTierCustomerDataPoint] = Field(
+        ..., min_length=1, description="List of customers with multi-tier ITE scores"
+    )
+
+    @field_validator("customers")
+    @classmethod
+    def validate_unique_customer_ids(
+        cls, v: List[MultiTierCustomerDataPoint]
+    ) -> List[MultiTierCustomerDataPoint]:
+        ids = [c.customer_id for c in v]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Duplicate customer_id detected in customer payload.")
+        return v
+
+    @model_validator(mode="after")
+    def validate_tier_lengths(self) -> "MultiTierOptimizationRequest":
+        num_tiers = len(self.tier_costs)
+        for c in self.customers:
+            if len(c.tier_ites) != num_tiers:
+                raise ValueError(
+                    f"Customer '{c.customer_id}' has {len(c.tier_ites)} tier ITEs, "
+                    f"expected {num_tiers} to match tier_costs."
+                )
+        return self
 
 
 class CustomerAllocation(BaseModel):

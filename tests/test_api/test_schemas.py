@@ -3,11 +3,13 @@
 import unittest
 from pydantic import ValidationError
 from src.api.schemas import (
+    CustomerAllocation,
     CustomerDataPoint,
+    MultiTierCustomerDataPoint,
+    MultiTierOptimizationRequest,
     OptimizationObjective,
     OptimizationRequest,
     OptimizationResponse,
-    CustomerAllocation,
 )
 
 
@@ -101,6 +103,60 @@ class TestApiSchemas(unittest.TestCase):
         )
         self.assertTrue(response.success)
         self.assertEqual(len(response.allocations), 1)
+
+    def test_valid_multi_tier_schemas(self):
+        customer = MultiTierCustomerDataPoint(
+            customer_id="cust_m1",
+            baseline_conversion_prob=0.12,
+            tier_ites=[0.05, 0.15],
+            customer_value=80.0,
+        )
+        self.assertEqual(customer.customer_id, "cust_m1")
+        self.assertEqual(customer.tier_ites, [0.05, 0.15])
+
+        request = MultiTierOptimizationRequest(
+            budget=200.0,
+            tier_costs=[10.0, 20.0],
+            objective=OptimizationObjective.MAXIMIZE_PROFIT,
+            customers=[customer],
+        )
+        self.assertEqual(request.budget, 200.0)
+        self.assertEqual(len(request.tier_costs), 2)
+        self.assertEqual(len(request.customers), 1)
+
+    def test_multi_tier_mismatched_tier_length(self):
+        customer = MultiTierCustomerDataPoint(
+            customer_id="cust_m2",
+            baseline_conversion_prob=0.10,
+            tier_ites=[0.05],  # 1 tier
+            customer_value=50.0,
+        )
+        with self.assertRaises(ValidationError):
+            MultiTierOptimizationRequest(
+                budget=100.0,
+                tier_costs=[10.0, 20.0],  # 2 tiers != 1 tier
+                customers=[customer],
+            )
+
+    def test_multi_tier_duplicate_customer_ids(self):
+        c1 = MultiTierCustomerDataPoint(
+            customer_id="dup_id",
+            baseline_conversion_prob=0.10,
+            tier_ites=[0.05, 0.10],
+            customer_value=50.0,
+        )
+        c2 = MultiTierCustomerDataPoint(
+            customer_id="dup_id",
+            baseline_conversion_prob=0.20,
+            tier_ites=[0.08, 0.12],
+            customer_value=50.0,
+        )
+        with self.assertRaises(ValidationError):
+            MultiTierOptimizationRequest(
+                budget=100.0,
+                tier_costs=[10.0, 20.0],
+                customers=[c1, c2],
+            )
 
 
 if __name__ == "__main__":
