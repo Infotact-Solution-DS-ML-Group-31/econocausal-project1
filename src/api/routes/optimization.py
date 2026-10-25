@@ -8,10 +8,16 @@ from src.api.schemas import (
     CustomerAllocation,
     DriftCheckRequest,
     DriftCheckResponse,
+    IngestAndAllocateRequest,
     MultiTierOptimizationRequest,
     OptimizationRequest,
     OptimizationResponse,
     PolicyComparisonResponse,
+)
+from src.api.pipeline_bridge import (
+    allocate_discounts,
+    build_request_from_causal_records,
+    export_allocation_to_records,
 )
 from src.optimization.base import OptimizationResult
 from src.optimization.baseline import BlanketDiscountSolver
@@ -151,25 +157,27 @@ def _build_multi_tier_optimization_response(
 )
 async def allocate_budget(request: OptimizationRequest) -> OptimizationResponse:
     """Execute SciPy-constrained linear programming optimization for customer discount allocation."""
-    customer_ids = np.array([c.customer_id for c in request.customers])
-    ite_vector = np.array([c.predicted_ite for c in request.customers], dtype=np.float64)
-    cost_vector = np.array([c.treatment_cost for c in request.customers], dtype=np.float64)
-    value_vector = np.array([c.customer_value for c in request.customers], dtype=np.float64)
+    return allocate_discounts(request)
 
-    solver = SciPyConstrainedSolver(
-        budget=request.budget,
-        objective=request.objective,
-        min_spend_per_user=request.min_spend_per_user,
-        integer_rounding=True,
-    )
-    result = solver.solve(
-        treatment_effects=ite_vector,
-        treatment_costs=cost_vector,
-        customer_ids=customer_ids,
-        customer_values=value_vector,
-    )
 
-    return _build_optimization_response(request, result)
+@router.post(
+    "/ingest-and-allocate",
+    response_model=OptimizationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Ingest raw causal ML records from M2 and compute optimal discount allocation",
+)
+async def ingest_and_allocate(
+    payload: IngestAndAllocateRequest,
+) -> OptimizationResponse:
+    """Bridge endpoint converting raw EconML/DoWhy records directly into optimal discount allocations."""
+    opt_request = build_request_from_causal_records(
+        records=payload.records,
+        budget=payload.budget,
+        default_cost=payload.default_cost,
+        default_value=payload.default_value,
+        objective=payload.objective,
+    )
+    return allocate_discounts(opt_request)
 
 
 @router.post(

@@ -165,4 +165,32 @@ class DriftCheckResponse(BaseModel):
     reference_count: int
     current_count: int
 
+
+class IngestAndAllocateRequest(BaseModel):
+    """Payload to ingest raw M2 causal inference records and perform budget allocation."""
+    records: List[Dict[str, Any]] = Field(
+        ..., min_length=1, description="Raw customer/treatment records from causal ML pipeline"
+    )
+    budget: float = Field(..., gt=0.0, description="Total available campaign budget")
+    default_cost: float = Field(
+        default=10.0, gt=0.0, description="Default promotional cost if missing from records"
+    )
+    default_value: float = Field(
+        default=50.0, gt=0.0, description="Default customer economic value if missing"
+    )
+    objective: OptimizationObjective = Field(
+        default=OptimizationObjective.MAXIMIZE_PROFIT,
+        description="Target business objective",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "records" not in data and "customers" in data:
+                data["records"] = data["customers"]
+            elif "records" not in data and "data" in data:
+                data["records"] = data["data"]
+        return data
+
 
