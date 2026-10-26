@@ -193,4 +193,55 @@ class IngestAndAllocateRequest(BaseModel):
                 data["records"] = data["data"]
         return data
 
+
+class UpliftDecilePoint(BaseModel):
+    """Cumulative performance metrics for a specific population percentile bucket."""
+    percentile: float = Field(..., description="Population percentile (e.g., 10.0, 20.0, ..., 100.0)")
+    customer_count: int = Field(..., description="Cumulative number of customers targeted")
+    cumulative_spend: float = Field(..., description="Cumulative treatment cost spend")
+    cumulative_incremental_conversions: float = Field(
+        ..., description="Cumulative expected incremental conversions"
+    )
+    cumulative_incremental_revenue: float = Field(
+        ..., description="Cumulative expected incremental revenue"
+    )
+    cumulative_net_profit: float = Field(..., description="Cumulative net profit (revenue - spend)")
+    random_baseline_revenue: float = Field(
+        ..., description="Expected cumulative incremental revenue under random rollout"
+    )
+
+
+class UpliftCurveRequest(BaseModel):
+    """Payload to compute cumulative uplift deciles, AUUC, and Qini metrics."""
+    customers: List[CustomerDataPoint] = Field(
+        ..., min_length=1, description="List of customers with ITE scores"
+    )
+    num_bins: int = Field(
+        default=10, ge=2, le=50, description="Number of population percentile bins (e.g., 10 for deciles)"
+    )
+
+    @field_validator("customers")
+    @classmethod
+    def validate_unique_customer_ids(cls, v: List[CustomerDataPoint]) -> List[CustomerDataPoint]:
+        ids = [c.customer_id for c in v]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Duplicate customer_id detected in customer payload.")
+        return v
+
+
+class UpliftCurveResponse(BaseModel):
+    """Cumulative uplift curve coordinates, AUUC score, and Qini evaluation report."""
+    deciles: List[UpliftDecilePoint] = Field(
+        ..., description="Percentile bucket points for Plotly.js curve visualization"
+    )
+    auuc_score: float = Field(..., description="Area Under the Uplift Curve")
+    qini_coefficient: float = Field(
+        ..., description="Normalized area between causal uplift curve and random baseline"
+    )
+    max_profit_percentile: float = Field(
+        ..., description="Population percentage that maximizes cumulative net profit"
+    )
+    total_customers: int = Field(..., description="Total evaluated customer count")
+
+
 

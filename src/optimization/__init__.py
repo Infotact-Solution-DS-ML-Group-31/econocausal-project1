@@ -13,6 +13,11 @@ from src.optimization.drift import (
     evaluate_distribution_drift,
 )
 from src.optimization.solver import SciPyConstrainedSolver
+from src.optimization.uplift_metrics import (
+    UpliftCurveReport,
+    UpliftDecilePoint,
+    compute_uplift_curve,
+)
 
 __all__ = [
     "BaseAllocationSolver",
@@ -26,4 +31,8 @@ __all__ = [
     "DriftReport",
     "calculate_psi",
     "evaluate_distribution_drift",
+    "UpliftCurveReport",
+    "UpliftDecilePoint",
+    "compute_uplift_curve",
 ]
+

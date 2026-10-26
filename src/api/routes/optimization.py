@@ -13,6 +13,9 @@ from src.api.schemas import (
     OptimizationRequest,
     OptimizationResponse,
     PolicyComparisonResponse,
+    UpliftCurveRequest,
+    UpliftCurveResponse,
+    UpliftDecilePoint as DecileSchema,
 )
 from src.api.pipeline_bridge import (
     allocate_discounts,
@@ -23,6 +26,7 @@ from src.optimization.base import OptimizationResult
 from src.optimization.baseline import BlanketDiscountSolver
 from src.optimization.drift import evaluate_distribution_drift
 from src.optimization.solver import SciPyConstrainedSolver
+from src.optimization.uplift_metrics import compute_uplift_curve
 
 router = APIRouter(prefix="/api/v1", tags=["Optimization & Allocation"])
 
@@ -301,3 +305,45 @@ async def check_drift(request: DriftCheckRequest) -> DriftCheckResponse:
         reference_count=len(request.reference_ites),
         current_count=len(request.current_ites),
     )
+
+
+@router.post(
+    "/uplift-curve",
+    response_model=UpliftCurveResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Generate cumulative uplift curve and Qini metrics for campaign evaluation",
+)
+async def get_uplift_curve(request: UpliftCurveRequest) -> UpliftCurveResponse:
+    """Compute cumulative uplift deciles, AUUC score, and Qini coefficient across customer cohort."""
+    ite_vector = np.array([c.predicted_ite for c in request.customers], dtype=np.float64)
+    cost_vector = np.array([c.treatment_cost for c in request.customers], dtype=np.float64)
+    value_vector = np.array([c.customer_value for c in request.customers], dtype=np.float64)
+
+    report = compute_uplift_curve(
+        treatment_effects=ite_vector,
+        treatment_costs=cost_vector,
+        customer_values=value_vector,
+        num_bins=request.num_bins,
+    )
+
+    decile_points = [
+        DecileSchema(
+            percentile=d.percentile,
+            customer_count=d.customer_count,
+            cumulative_spend=d.cumulative_spend,
+            cumulative_incremental_conversions=d.cumulative_incremental_conversions,
+            cumulative_incremental_revenue=d.cumulative_incremental_revenue,
+            cumulative_net_profit=d.cumulative_net_profit,
+            random_baseline_revenue=d.random_baseline_revenue,
+        )
+        for d in report.deciles
+    ]
+
+    return UpliftCurveResponse(
+        deciles=decile_points,
+        auuc_score=report.auuc_score,
+        qini_coefficient=report.qini_coefficient,
+        max_profit_percentile=report.max_profit_percentile,
+        total_customers=len(request.customers),
+    )
+
