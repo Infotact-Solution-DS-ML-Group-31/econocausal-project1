@@ -13,6 +13,8 @@ from src.api.schemas import (
     OptimizationRequest,
     OptimizationResponse,
     PolicyComparisonResponse,
+    SegmentSummarySchema,
+    ExecutiveReportResponse,
     UpliftCurveRequest,
     UpliftCurveResponse,
     UpliftDecilePoint as DecileSchema,
@@ -25,6 +27,7 @@ from src.api.pipeline_bridge import (
 from src.optimization.base import OptimizationResult
 from src.optimization.baseline import BlanketDiscountSolver
 from src.optimization.drift import evaluate_distribution_drift
+from src.optimization.reporting import generate_executive_report
 from src.optimization.solver import SciPyConstrainedSolver
 from src.optimization.uplift_metrics import compute_uplift_curve
 
@@ -345,5 +348,41 @@ async def get_uplift_curve(request: UpliftCurveRequest) -> UpliftCurveResponse:
         qini_coefficient=report.qini_coefficient,
         max_profit_percentile=report.max_profit_percentile,
         total_customers=len(request.customers),
+    )
+
+
+@router.post(
+    "/executive-report",
+    response_model=ExecutiveReportResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Generate executive summary report with causal quadrant segmentation",
+)
+async def get_executive_report(request: OptimizationRequest) -> ExecutiveReportResponse:
+    """Generate executive campaign report comparing causal optimization to blanket discounting."""
+    report = generate_executive_report(request)
+
+    segment_schemas = [
+        SegmentSummarySchema(
+            segment_name=s.segment_name,
+            customer_count=s.customer_count,
+            population_pct=s.population_pct,
+            mean_ite=s.mean_ite,
+            mean_baseline_prob=s.mean_baseline_prob,
+            recommended_action=s.recommended_action,
+        )
+        for s in report.segments
+    ]
+
+    return ExecutiveReportResponse(
+        total_customers=report.total_customers,
+        budget=report.budget,
+        total_spend=report.total_spend,
+        expected_incremental_revenue=report.expected_incremental_revenue,
+        expected_net_profit=report.expected_net_profit,
+        roi_pct=report.roi_pct,
+        savings_vs_blanket=report.savings_vs_blanket,
+        segments=segment_schemas,
+        headline_summary=report.headline_summary,
+        bullet_insights=report.bullet_insights,
     )
 

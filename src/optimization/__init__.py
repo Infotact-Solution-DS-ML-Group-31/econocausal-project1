@@ -12,6 +12,12 @@ from src.optimization.drift import (
     calculate_psi,
     evaluate_distribution_drift,
 )
+from src.optimization.reporting import (
+    ExecutiveCampaignReport,
+    SegmentSummary,
+    classify_customer_segments,
+    generate_executive_report,
+)
 from src.optimization.solver import SciPyConstrainedSolver
 from src.optimization.uplift_metrics import (
     UpliftCurveReport,
@@ -34,5 +40,9 @@ __all__ = [
     "UpliftCurveReport",
     "UpliftDecilePoint",
     "compute_uplift_curve",
+    "SegmentSummary",
+    "ExecutiveCampaignReport",
+    "classify_customer_segments",
+    "generate_executive_report",
 ]
 

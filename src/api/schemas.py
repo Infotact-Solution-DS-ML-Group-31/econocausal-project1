@@ -243,5 +243,28 @@ class UpliftCurveResponse(BaseModel):
     )
     total_customers: int = Field(..., description="Total evaluated customer count")
 
+class SegmentSummarySchema(BaseModel):
+    """Causal uplift quadrant summary metrics for campaign decisioning."""
+    segment_name: str = Field(
+        ..., description="Quadrant name ('Persuadables', 'Sure Things', 'Lost Causes', or 'Sleeping Dogs')"
+    )
+    customer_count: int = Field(..., ge=0, description="Number of customers classified in this quadrant")
+    population_pct: float = Field(..., ge=0.0, le=100.0, description="Percentage of total cohort population")
+    mean_ite: float = Field(..., description="Average Individual Treatment Effect for this quadrant")
+    mean_baseline_prob: float = Field(..., ge=0.0, le=1.0, description="Average baseline conversion probability")
+    recommended_action: str = Field(..., description="Recommended marketing / discount action for this segment")
 
-
+
+class ExecutiveReportResponse(BaseModel):
+    """High-level executive summary report comparing causal optimization to blanket discounting."""
+    total_customers: int = Field(..., ge=0, description="Total customers evaluated in campaign cohort")
+    budget: float = Field(..., ge=0.0, description="Total campaign budget")
+    total_spend: float = Field(..., ge=0.0, description="Total budget spent under causal optimization")
+    expected_incremental_revenue: float = Field(..., description="Total expected incremental revenue generated")
+    expected_net_profit: float = Field(..., description="Total expected net profit (revenue - spend)")
+    roi_pct: float = Field(..., description="Net campaign Return on Investment percentage")
+    savings_vs_blanket: float = Field(..., description="Net profit improvement of causal SciPy over blanket baseline")
+    segments: List[SegmentSummarySchema] = Field(..., description="Quadrant breakdown of customer cohort")
+    headline_summary: str = Field(..., description="Natural language executive summary headline")
+    bullet_insights: List[str] = Field(..., description="Key actionable business insights")
+
