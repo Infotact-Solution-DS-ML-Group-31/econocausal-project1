@@ -1,0 +1,1431 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "EconoCausal API",
+    "description": "Prescriptive AI Dynamic Pricing & Discount Allocation Engine",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/mock-customers": {
+      "get": {
+        "tags": [
+          "Scoring & Previews"
+        ],
+        "summary": "Generate synthetic customer ITE dataset for UI testing",
+        "description": "Return synthetic customer records with Causal ITE scores for frontend integration.",
+        "operationId": "get_mock_customers_api_v1_mock_customers_get",
+        "parameters": [
+          {
+            "name": "count",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "description": "Number of customers to generate",
+              "default": 50,
+              "title": "Count"
+            },
+            "description": "Number of customers to generate"
+          },
+          {
+            "name": "treatment_cost",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0.0,
+              "description": "Discount cost per customer",
+              "default": 10.0,
+              "title": "Treatment Cost"
+            },
+            "description": "Discount cost per customer"
+          },
+          {
+            "name": "customer_value",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0.0,
+              "description": "Expected order value",
+              "default": 50.0,
+              "title": "Customer Value"
+            },
+            "description": "Expected order value"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CustomerDataPoint"
+                  },
+                  "title": "Response Get Mock Customers Api V1 Mock Customers Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/score-summary": {
+      "post": {
+        "tags": [
+          "Scoring & Previews"
+        ],
+        "summary": "Calculate aggregate uplift statistics across a customer cohort",
+        "description": "Compute distributional metrics on incoming customer ITE scores before optimization.",
+        "operationId": "summarize_customer_scores_api_v1_score_summary_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/CustomerDataPoint"
+                },
+                "type": "array",
+                "title": "Customers"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Summarize Customer Scores Api V1 Score Summary Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/allocate": {
+      "post": {
+        "tags": [
+          "Optimization & Allocation"
+        ],
+        "summary": "Compute optimal discount allocation under budget constraints",
+        "description": "Execute SciPy-constrained linear programming optimization for customer discount allocation.",
+        "operationId": "allocate_budget_api_v1_allocate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OptimizationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptimizationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ingest-and-allocate": {
+      "post": {
+        "tags": [
+          "Optimization & Allocation"
+        ],
+        "summary": "Ingest raw causal ML records from M2 and compute optimal discount allocation",
+        "description": "Bridge endpoint converting raw EconML/DoWhy records directly into optimal discount allocations.",
+        "operationId": "ingest_and_allocate_api_v1_ingest_and_allocate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestAndAllocateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptimizationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/allocate-multi-tier": {
+      "post": {
+        "tags": [
+          "Optimization & Allocation"
+        ],
+        "summary": "Compute optimal multi-tier discount allocation under budget constraints",
+        "description": "Execute SciPy-constrained linear programming optimization for multi-tier discount allocation.",
+        "operationId": "allocate_multi_tier_budget_api_v1_allocate_multi_tier_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MultiTierOptimizationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptimizationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/compare-policies": {
+      "post": {
+        "tags": [
+          "Optimization & Allocation"
+        ],
+        "summary": "Benchmark causal optimization against naive blanket discount baseline",
+        "description": "Benchmark causal optimization against standard blanket discount allocation.",
+        "operationId": "compare_policies_api_v1_compare_policies_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OptimizationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyComparisonResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/drift-check": {
+      "post": {
+        "tags": [
+          "Optimization & Allocation"
+        ],
+        "summary": "Evaluate distribution drift between reference and current ITE distributions",
+        "description": "Evaluate covariate and treatment effect distribution drift using PSI and KS-2sample test.",
+        "operationId": "check_drift_api_v1_drift_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriftCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriftCheckResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uplift-curve": {
+      "post": {
+        "tags": [
+          "Optimization & Allocation"
+        ],
+        "summary": "Generate cumulative uplift curve and Qini metrics for campaign evaluation",
+        "description": "Compute cumulative uplift deciles, AUUC score, and Qini coefficient across customer cohort.",
+        "operationId": "get_uplift_curve_api_v1_uplift_curve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpliftCurveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpliftCurveResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/executive-report": {
+      "post": {
+        "tags": [
+          "Optimization & Allocation"
+        ],
+        "summary": "Generate executive summary report with causal quadrant segmentation",
+        "description": "Generate executive campaign report comparing causal optimization to blanket discounting.",
+        "operationId": "get_executive_report_api_v1_executive_report_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OptimizationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutiveReportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/simulate-confidence": {
+      "post": {
+        "tags": [
+          "Optimization & Allocation"
+        ],
+        "summary": "Run Monte Carlo simulation to quantify policy risk and confidence bounds",
+        "description": "Evaluate optimal policy robustness against ITE score uncertainty via Monte Carlo sampling.",
+        "operationId": "simulate_confidence_api_v1_simulate_confidence_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MonteCarloSimulationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonteCarloSimulationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": [
+          "General"
+        ],
+        "summary": "Root",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Root  Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Monitoring"
+        ],
+        "summary": "Health Check",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Check Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "tags": [
+          "Monitoring"
+        ],
+        "summary": "Readiness Check",
+        "operationId": "readiness_check_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Readiness Check Ready Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CustomerAllocation": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "assigned_discount": {
+            "type": "number",
+            "title": "Assigned Discount",
+            "description": "Discount allocated ($0, $10, $20, etc.)"
+          },
+          "is_targeted": {
+            "type": "boolean",
+            "title": "Is Targeted",
+            "description": "Whether customer received a promotional offer"
+          },
+          "expected_incremental_revenue": {
+            "type": "number",
+            "title": "Expected Incremental Revenue"
+          },
+          "expected_net_profit": {
+            "type": "number",
+            "title": "Expected Net Profit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "assigned_discount",
+          "is_targeted",
+          "expected_incremental_revenue",
+          "expected_net_profit"
+        ],
+        "title": "CustomerAllocation",
+        "description": "Recommended discount decision for an individual customer."
+      },
+      "CustomerDataPoint": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id",
+            "description": "Unique customer identifier"
+          },
+          "baseline_conversion_prob": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Baseline Conversion Prob",
+            "description": "Predicted baseline conversion without discount"
+          },
+          "predicted_ite": {
+            "type": "number",
+            "title": "Predicted Ite",
+            "description": "Estimated Individual Treatment Effect (uplift delta)"
+          },
+          "treatment_cost": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Treatment Cost",
+            "description": "Promotional cost of the discount tier (e.g., $10 or $20)"
+          },
+          "customer_value": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Customer Value",
+            "description": "Expected average order value or customer lifetime value",
+            "default": 50.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "baseline_conversion_prob",
+          "predicted_ite",
+          "treatment_cost"
+        ],
+        "title": "CustomerDataPoint",
+        "description": "Customer-level treatment effect score produced by M2 (Causal ML)."
+      },
+      "DriftCheckRequest": {
+        "properties": {
+          "reference_ites": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "minItems": 5,
+            "title": "Reference Ites",
+            "description": "Historical reference treatment effect distribution"
+          },
+          "current_ites": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "minItems": 5,
+            "title": "Current Ites",
+            "description": "Current scoring batch treatment effect distribution"
+          },
+          "psi_threshold": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Psi Threshold",
+            "description": "PSI threshold for critical distribution drift",
+            "default": 0.25
+          },
+          "ks_alpha": {
+            "type": "number",
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Ks Alpha",
+            "description": "Significance level alpha for Kolmogorov-Smirnov test",
+            "default": 0.05
+          }
+        },
+        "type": "object",
+        "required": [
+          "reference_ites",
+          "current_ites"
+        ],
+        "title": "DriftCheckRequest",
+        "description": "Payload to evaluate distribution drift between reference and current ITE scores."
+      },
+      "DriftCheckResponse": {
+        "properties": {
+          "drift_detected": {
+            "type": "boolean",
+            "title": "Drift Detected"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "psi_score": {
+            "type": "number",
+            "title": "Psi Score"
+          },
+          "ks_statistic": {
+            "type": "number",
+            "title": "Ks Statistic"
+          },
+          "ks_pvalue": {
+            "type": "number",
+            "title": "Ks Pvalue"
+          },
+          "recommendation": {
+            "type": "string",
+            "title": "Recommendation"
+          },
+          "reference_count": {
+            "type": "integer",
+            "title": "Reference Count"
+          },
+          "current_count": {
+            "type": "integer",
+            "title": "Current Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "drift_detected",
+          "severity",
+          "psi_score",
+          "ks_statistic",
+          "ks_pvalue",
+          "recommendation",
+          "reference_count",
+          "current_count"
+        ],
+        "title": "DriftCheckResponse",
+        "description": "Statistical distribution drift evaluation report."
+      },
+      "ExecutiveReportResponse": {
+        "properties": {
+          "total_customers": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total Customers",
+            "description": "Total customers evaluated in campaign cohort"
+          },
+          "budget": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Budget",
+            "description": "Total campaign budget"
+          },
+          "total_spend": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Total Spend",
+            "description": "Total budget spent under causal optimization"
+          },
+          "expected_incremental_revenue": {
+            "type": "number",
+            "title": "Expected Incremental Revenue",
+            "description": "Total expected incremental revenue generated"
+          },
+          "expected_net_profit": {
+            "type": "number",
+            "title": "Expected Net Profit",
+            "description": "Total expected net profit (revenue - spend)"
+          },
+          "roi_pct": {
+            "type": "number",
+            "title": "Roi Pct",
+            "description": "Net campaign Return on Investment percentage"
+          },
+          "savings_vs_blanket": {
+            "type": "number",
+            "title": "Savings Vs Blanket",
+            "description": "Net profit improvement of causal SciPy over blanket baseline"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/SegmentSummarySchema"
+            },
+            "type": "array",
+            "title": "Segments",
+            "description": "Quadrant breakdown of customer cohort"
+          },
+          "headline_summary": {
+            "type": "string",
+            "title": "Headline Summary",
+            "description": "Natural language executive summary headline"
+          },
+          "bullet_insights": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Bullet Insights",
+            "description": "Key actionable business insights"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_customers",
+          "budget",
+          "total_spend",
+          "expected_incremental_revenue",
+          "expected_net_profit",
+          "roi_pct",
+          "savings_vs_blanket",
+          "segments",
+          "headline_summary",
+          "bullet_insights"
+        ],
+        "title": "ExecutiveReportResponse",
+        "description": "High-level executive summary report comparing causal optimization to blanket discounting."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "IngestAndAllocateRequest": {
+        "properties": {
+          "records": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Records",
+            "description": "Raw customer/treatment records from causal ML pipeline"
+          },
+          "budget": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Budget",
+            "description": "Total available campaign budget"
+          },
+          "default_cost": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Default Cost",
+            "description": "Default promotional cost if missing from records",
+            "default": 10.0
+          },
+          "default_value": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Default Value",
+            "description": "Default customer economic value if missing",
+            "default": 50.0
+          },
+          "objective": {
+            "$ref": "#/components/schemas/OptimizationObjective",
+            "description": "Target business objective",
+            "default": "maximize_profit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "records",
+          "budget"
+        ],
+        "title": "IngestAndAllocateRequest",
+        "description": "Payload to ingest raw M2 causal inference records and perform budget allocation."
+      },
+      "MonteCarloSimulationRequest": {
+        "properties": {
+          "budget": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Budget",
+            "description": "Total available campaign budget"
+          },
+          "objective": {
+            "$ref": "#/components/schemas/OptimizationObjective",
+            "description": "Target business objective",
+            "default": "maximize_profit"
+          },
+          "min_spend_per_user": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Min Spend Per User",
+            "description": "Minimum subsidy per targeted user",
+            "default": 0.0
+          },
+          "customers": {
+            "items": {
+              "$ref": "#/components/schemas/CustomerDataPoint"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Customers",
+            "description": "List of customers with ITE scores"
+          },
+          "ite_std_error": {
+            "type": "number",
+            "maximum": 0.5,
+            "minimum": 0.0,
+            "title": "Ite Std Error",
+            "description": "Standard deviation of ITE perturbation noise",
+            "default": 0.03
+          },
+          "num_simulations": {
+            "type": "integer",
+            "maximum": 2000.0,
+            "minimum": 10.0,
+            "title": "Num Simulations",
+            "description": "Number of Monte Carlo simulation trials",
+            "default": 200
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Random seed for reproducible sampling",
+            "default": 42
+          }
+        },
+        "type": "object",
+        "required": [
+          "budget",
+          "customers"
+        ],
+        "title": "MonteCarloSimulationRequest",
+        "description": "Payload to simulate policy confidence and risk distributions via Monte Carlo sampling."
+      },
+      "MonteCarloSimulationResponse": {
+        "properties": {
+          "num_simulations": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Num Simulations",
+            "description": "Number of simulation trials executed"
+          },
+          "budget": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Budget",
+            "description": "Total campaign budget"
+          },
+          "total_spend": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Total Spend",
+            "description": "Total promotional spend under optimal policy"
+          },
+          "mean_net_profit": {
+            "type": "number",
+            "title": "Mean Net Profit",
+            "description": "Expected mean net profit across trials"
+          },
+          "std_net_profit": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Std Net Profit",
+            "description": "Standard deviation of realized net profits"
+          },
+          "ci_lower_5pct": {
+            "type": "number",
+            "title": "Ci Lower 5Pct",
+            "description": "5th percentile empirical confidence bound of net profit"
+          },
+          "ci_upper_95pct": {
+            "type": "number",
+            "title": "Ci Upper 95Pct",
+            "description": "95th percentile empirical confidence bound of net profit"
+          },
+          "probability_of_positive_roi": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Probability Of Positive Roi",
+            "description": "Empirical probability of achieving positive net profit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "num_simulations",
+          "budget",
+          "total_spend",
+          "mean_net_profit",
+          "std_net_profit",
+          "ci_lower_5pct",
+          "ci_upper_95pct",
+          "probability_of_positive_roi"
+        ],
+        "title": "MonteCarloSimulationResponse",
+        "description": "Empirical distribution metrics and risk bounds from Monte Carlo policy simulation."
+      },
+      "MultiTierCustomerDataPoint": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id",
+            "description": "Unique customer identifier"
+          },
+          "baseline_conversion_prob": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Baseline Conversion Prob",
+            "description": "Predicted baseline conversion without discount"
+          },
+          "tier_ites": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Tier Ites",
+            "description": "Predicted ITE for each discount tier (e.g., [$10_ite, $20_ite])"
+          },
+          "customer_value": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Customer Value",
+            "description": "Expected average order value or customer lifetime value",
+            "default": 50.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "baseline_conversion_prob",
+          "tier_ites"
+        ],
+        "title": "MultiTierCustomerDataPoint",
+        "description": "Customer-level multi-treatment effect scores across discount tiers."
+      },
+      "MultiTierOptimizationRequest": {
+        "properties": {
+          "budget": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Budget",
+            "description": "Total available campaign budget"
+          },
+          "tier_costs": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Tier Costs",
+            "description": "Cost for each discount tier (e.g., [10.0, 20.0])"
+          },
+          "objective": {
+            "$ref": "#/components/schemas/OptimizationObjective",
+            "description": "Target business objective",
+            "default": "maximize_profit"
+          },
+          "min_spend_per_user": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Min Spend Per User",
+            "description": "Minimum subsidy per targeted user",
+            "default": 0.0
+          },
+          "customers": {
+            "items": {
+              "$ref": "#/components/schemas/MultiTierCustomerDataPoint"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Customers",
+            "description": "List of customers with multi-tier ITE scores"
+          }
+        },
+        "type": "object",
+        "required": [
+          "budget",
+          "tier_costs",
+          "customers"
+        ],
+        "title": "MultiTierOptimizationRequest",
+        "description": "Payload submitted to allocate budget across multiple discount tiers."
+      },
+      "OptimizationObjective": {
+        "type": "string",
+        "enum": [
+          "maximize_revenue",
+          "maximize_profit",
+          "maximize_conversions"
+        ],
+        "title": "OptimizationObjective",
+        "description": "Supported business objectives for discount allocation."
+      },
+      "OptimizationRequest": {
+        "properties": {
+          "budget": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Budget",
+            "description": "Total available campaign budget"
+          },
+          "objective": {
+            "$ref": "#/components/schemas/OptimizationObjective",
+            "description": "Target business objective",
+            "default": "maximize_profit"
+          },
+          "min_spend_per_user": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Min Spend Per User",
+            "description": "Minimum subsidy per targeted user",
+            "default": 0.0
+          },
+          "customers": {
+            "items": {
+              "$ref": "#/components/schemas/CustomerDataPoint"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Customers",
+            "description": "List of customers with ITE scores"
+          }
+        },
+        "type": "object",
+        "required": [
+          "budget",
+          "customers"
+        ],
+        "title": "OptimizationRequest",
+        "description": "Payload submitted by M4 (UI) to run budget-constrained allocation."
+      },
+      "OptimizationResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "status_message": {
+            "type": "string",
+            "title": "Status Message"
+          },
+          "total_budget": {
+            "type": "number",
+            "title": "Total Budget"
+          },
+          "total_spend": {
+            "type": "number",
+            "title": "Total Spend"
+          },
+          "budget_utilization_pct": {
+            "type": "number",
+            "title": "Budget Utilization Pct"
+          },
+          "total_expected_incremental_revenue": {
+            "type": "number",
+            "title": "Total Expected Incremental Revenue"
+          },
+          "total_expected_net_profit": {
+            "type": "number",
+            "title": "Total Expected Net Profit"
+          },
+          "targeted_customers_count": {
+            "type": "integer",
+            "title": "Targeted Customers Count"
+          },
+          "total_customers_count": {
+            "type": "integer",
+            "title": "Total Customers Count"
+          },
+          "allocations": {
+            "items": {
+              "$ref": "#/components/schemas/CustomerAllocation"
+            },
+            "type": "array",
+            "title": "Allocations"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "status_message",
+          "total_budget",
+          "total_spend",
+          "budget_utilization_pct",
+          "total_expected_incremental_revenue",
+          "total_expected_net_profit",
+          "targeted_customers_count",
+          "total_customers_count",
+          "allocations"
+        ],
+        "title": "OptimizationResponse",
+        "description": "Response returned to M4 for dashboard metrics and table rendering."
+      },
+      "PolicyComparisonResponse": {
+        "properties": {
+          "budget": {
+            "type": "number",
+            "title": "Budget"
+          },
+          "causal_scipy_policy": {
+            "$ref": "#/components/schemas/OptimizationResponse"
+          },
+          "blanket_baseline_policy": {
+            "$ref": "#/components/schemas/OptimizationResponse"
+          },
+          "net_profit_improvement": {
+            "type": "number",
+            "title": "Net Profit Improvement"
+          },
+          "executive_summary": {
+            "type": "string",
+            "title": "Executive Summary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "budget",
+          "causal_scipy_policy",
+          "blanket_baseline_policy",
+          "net_profit_improvement",
+          "executive_summary"
+        ],
+        "title": "PolicyComparisonResponse",
+        "description": "Response comparing causal optimization policy against blanket discount baseline."
+      },
+      "SegmentSummarySchema": {
+        "properties": {
+          "segment_name": {
+            "type": "string",
+            "title": "Segment Name",
+            "description": "Quadrant name ('Persuadables', 'Sure Things', 'Lost Causes', or 'Sleeping Dogs')"
+          },
+          "customer_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Customer Count",
+            "description": "Number of customers classified in this quadrant"
+          },
+          "population_pct": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Population Pct",
+            "description": "Percentage of total cohort population"
+          },
+          "mean_ite": {
+            "type": "number",
+            "title": "Mean Ite",
+            "description": "Average Individual Treatment Effect for this quadrant"
+          },
+          "mean_baseline_prob": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Mean Baseline Prob",
+            "description": "Average baseline conversion probability"
+          },
+          "recommended_action": {
+            "type": "string",
+            "title": "Recommended Action",
+            "description": "Recommended marketing / discount action for this segment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "segment_name",
+          "customer_count",
+          "population_pct",
+          "mean_ite",
+          "mean_baseline_prob",
+          "recommended_action"
+        ],
+        "title": "SegmentSummarySchema",
+        "description": "Causal uplift quadrant summary metrics for campaign decisioning."
+      },
+      "UpliftCurveRequest": {
+        "properties": {
+          "customers": {
+            "items": {
+              "$ref": "#/components/schemas/CustomerDataPoint"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Customers",
+            "description": "List of customers with ITE scores"
+          },
+          "num_bins": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 2.0,
+            "title": "Num Bins",
+            "description": "Number of population percentile bins (e.g., 10 for deciles)",
+            "default": 10
+          }
+        },
+        "type": "object",
+        "required": [
+          "customers"
+        ],
+        "title": "UpliftCurveRequest",
+        "description": "Payload to compute cumulative uplift deciles, AUUC, and Qini metrics."
+      },
+      "UpliftCurveResponse": {
+        "properties": {
+          "deciles": {
+            "items": {
+              "$ref": "#/components/schemas/UpliftDecilePoint"
+            },
+            "type": "array",
+            "title": "Deciles",
+            "description": "Percentile bucket points for Plotly.js curve visualization"
+          },
+          "auuc_score": {
+            "type": "number",
+            "title": "Auuc Score",
+            "description": "Area Under the Uplift Curve"
+          },
+          "qini_coefficient": {
+            "type": "number",
+            "title": "Qini Coefficient",
+            "description": "Normalized area between causal uplift curve and random baseline"
+          },
+          "max_profit_percentile": {
+            "type": "number",
+            "title": "Max Profit Percentile",
+            "description": "Population percentage that maximizes cumulative net profit"
+          },
+          "total_customers": {
+            "type": "integer",
+            "title": "Total Customers",
+            "description": "Total evaluated customer count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deciles",
+          "auuc_score",
+          "qini_coefficient",
+          "max_profit_percentile",
+          "total_customers"
+        ],
+        "title": "UpliftCurveResponse",
+        "description": "Cumulative uplift curve coordinates, AUUC score, and Qini evaluation report."
+      },
+      "UpliftDecilePoint": {
+        "properties": {
+          "percentile": {
+            "type": "number",
+            "title": "Percentile",
+            "description": "Population percentile (e.g., 10.0, 20.0, ..., 100.0)"
+          },
+          "customer_count": {
+            "type": "integer",
+            "title": "Customer Count",
+            "description": "Cumulative number of customers targeted"
+          },
+          "cumulative_spend": {
+            "type": "number",
+            "title": "Cumulative Spend",
+            "description": "Cumulative treatment cost spend"
+          },
+          "cumulative_incremental_conversions": {
+            "type": "number",
+            "title": "Cumulative Incremental Conversions",
+            "description": "Cumulative expected incremental conversions"
+          },
+          "cumulative_incremental_revenue": {
+            "type": "number",
+            "title": "Cumulative Incremental Revenue",
+            "description": "Cumulative expected incremental revenue"
+          },
+          "cumulative_net_profit": {
+            "type": "number",
+            "title": "Cumulative Net Profit",
+            "description": "Cumulative net profit (revenue - spend)"
+          },
+          "random_baseline_revenue": {
+            "type": "number",
+            "title": "Random Baseline Revenue",
+            "description": "Expected cumulative incremental revenue under random rollout"
+          }
+        },
+        "type": "object",
+        "required": [
+          "percentile",
+          "customer_count",
+          "cumulative_spend",
+          "cumulative_incremental_conversions",
+          "cumulative_incremental_revenue",
+          "cumulative_net_profit",
+          "random_baseline_revenue"
+        ],
+        "title": "UpliftDecilePoint",
+        "description": "Cumulative performance metrics for a specific population percentile bucket."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
