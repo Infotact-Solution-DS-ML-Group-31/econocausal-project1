@@ -268,3 +268,27 @@ class ExecutiveReportResponse(BaseModel):
     headline_summary: str = Field(..., description="Natural language executive summary headline")
     bullet_insights: List[str] = Field(..., description="Key actionable business insights")
 
+class MonteCarloSimulationRequest(OptimizationRequest):
+    """Payload to simulate policy confidence and risk distributions via Monte Carlo sampling."""
+    ite_std_error: float = Field(
+        default=0.03, ge=0.0, le=0.50, description="Standard deviation of ITE perturbation noise"
+    )
+    num_simulations: int = Field(
+        default=200, ge=10, le=2000, description="Number of Monte Carlo simulation trials"
+    )
+    seed: Optional[int] = Field(default=42, description="Random seed for reproducible sampling")
+
+
+class MonteCarloSimulationResponse(BaseModel):
+    """Empirical distribution metrics and risk bounds from Monte Carlo policy simulation."""
+    num_simulations: int = Field(..., ge=1, description="Number of simulation trials executed")
+    budget: float = Field(..., ge=0.0, description="Total campaign budget")
+    total_spend: float = Field(..., ge=0.0, description="Total promotional spend under optimal policy")
+    mean_net_profit: float = Field(..., description="Expected mean net profit across trials")
+    std_net_profit: float = Field(..., ge=0.0, description="Standard deviation of realized net profits")
+    ci_lower_5pct: float = Field(..., description="5th percentile empirical confidence bound of net profit")
+    ci_upper_95pct: float = Field(..., description="95th percentile empirical confidence bound of net profit")
+    probability_of_positive_roi: float = Field(
+        ..., ge=0.0, le=1.0, description="Empirical probability of achieving positive net profit"
+    )
+

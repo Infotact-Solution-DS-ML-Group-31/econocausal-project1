@@ -18,6 +18,10 @@ from src.optimization.reporting import (
     classify_customer_segments,
     generate_executive_report,
 )
+from src.optimization.simulation import (
+    MonteCarloSimulationResult,
+    run_policy_monte_carlo,
+)
 from src.optimization.solver import SciPyConstrainedSolver
 from src.optimization.uplift_metrics import (
     UpliftCurveReport,
@@ -44,5 +48,7 @@ __all__ = [
     "ExecutiveCampaignReport",
     "classify_customer_segments",
     "generate_executive_report",
+    "MonteCarloSimulationResult",
+    "run_policy_monte_carlo",
 ]
 

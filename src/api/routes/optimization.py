@@ -15,6 +15,8 @@ from src.api.schemas import (
     PolicyComparisonResponse,
     SegmentSummarySchema,
     ExecutiveReportResponse,
+    MonteCarloSimulationRequest,
+    MonteCarloSimulationResponse,
     UpliftCurveRequest,
     UpliftCurveResponse,
     UpliftDecilePoint as DecileSchema,
@@ -28,6 +30,7 @@ from src.optimization.base import OptimizationResult
 from src.optimization.baseline import BlanketDiscountSolver
 from src.optimization.drift import evaluate_distribution_drift
 from src.optimization.reporting import generate_executive_report
+from src.optimization.simulation import run_policy_monte_carlo
 from src.optimization.solver import SciPyConstrainedSolver
 from src.optimization.uplift_metrics import compute_uplift_curve
 
@@ -384,5 +387,32 @@ async def get_executive_report(request: OptimizationRequest) -> ExecutiveReportR
         segments=segment_schemas,
         headline_summary=report.headline_summary,
         bullet_insights=report.bullet_insights,
+    )
+
+
+@router.post(
+    "/simulate-confidence",
+    response_model=MonteCarloSimulationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Run Monte Carlo simulation to quantify policy risk and confidence bounds",
+)
+async def simulate_confidence(request: MonteCarloSimulationRequest) -> MonteCarloSimulationResponse:
+    """Evaluate optimal policy robustness against ITE score uncertainty via Monte Carlo sampling."""
+    sim_result = run_policy_monte_carlo(
+        request=request,
+        ite_std_error=request.ite_std_error,
+        num_simulations=request.num_simulations,
+        seed=request.seed if request.seed is not None else 42,
+    )
+
+    return MonteCarloSimulationResponse(
+        num_simulations=sim_result.num_simulations,
+        budget=sim_result.budget,
+        total_spend=sim_result.total_spend,
+        mean_net_profit=sim_result.mean_net_profit,
+        std_net_profit=sim_result.std_net_profit,
+        ci_lower_5pct=sim_result.ci_lower_5pct,
+        ci_upper_95pct=sim_result.ci_upper_95pct,
+        probability_of_positive_roi=sim_result.probability_of_positive_roi,
     )
 
