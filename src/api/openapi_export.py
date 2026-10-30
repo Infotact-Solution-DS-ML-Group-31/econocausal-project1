@@ -3,7 +3,9 @@
 import json
 from pathlib import Path
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, List
+
+from fastapi.routing import APIRoute
 
 # Ensure project root is in sys.path when run directly as a script
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -33,6 +35,19 @@ def export_openapi_json(output_path: str = "docs/openapi.json") -> str:
     return str(dest)
 
 
+def _extract_api_routes(routes: List[Any]) -> List[APIRoute]:
+    """Recursively extract all APIRoute instances from FastAPI application routes."""
+    extracted: List[APIRoute] = []
+    for r in routes:
+        if isinstance(r, APIRoute):
+            extracted.append(r)
+        elif hasattr(r, "original_router") and hasattr(r.original_router, "routes"):
+            extracted.extend(_extract_api_routes(r.original_router.routes))
+        elif hasattr(r, "routes"):
+            extracted.extend(_extract_api_routes(r.routes))
+    return extracted
+
+
 def generate_api_markdown_summary(output_path: str = "docs/api_reference.md") -> str:
     """Generate Markdown summary table of all registered API endpoints for frontend integration.
 
@@ -60,37 +75,43 @@ def generate_api_markdown_summary(output_path: str = "docs/api_reference.md") ->
         "",
         "## Summary of Endpoints",
         "",
-        "| HTTP Method | Endpoint | Request Model | Description |",
+        "| HTTP Method | Endpoint Path | Tag / Category | Description |",
         "|:---|:---|:---|:---|",
     ]
 
-    for path, methods in openapi.get("paths", {}).items():
-        for method, op in methods.items():
-            if method.lower() not in ("get", "post", "put", "delete", "patch"):
+    ignored_paths = {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
+
+    # Inspect all registered endpoints via app.routes
+    api_routes = _extract_api_routes(app.routes)
+
+    # Dedup and format rows while preserving route discovery order
+    seen_endpoints = set()
+    for route in api_routes:
+        if route.path in ignored_paths:
+            continue
+
+        valid_methods = [m for m in route.methods if m not in ("HEAD", "OPTIONS")]
+        for method in sorted(valid_methods):
+            key = (method, route.path)
+            if key in seen_endpoints:
                 continue
+            seen_endpoints.add(key)
 
-            req_body = (
-                op.get("requestBody", {})
-                .get("content", {})
-                .get("application/json", {})
-                .get("schema", {})
-            )
-            ref = req_body.get("$ref")
-            if ref:
-                model_name = ref.split("/")[-1]
-            elif req_body.get("type") == "array":
-                item_ref = req_body.get("items", {}).get("$ref", "")
-                if item_ref:
-                    model_name = f"List[{item_ref.split('/')[-1]}]"
-                else:
-                    model_name = "List[Any]"
-            else:
-                model_name = "None"
+            tag = ", ".join(route.tags) if route.tags else "General"
 
-            summary = op.get("summary", "") or op.get("description", "")
+            summary = route.summary or route.description or ""
+            if not summary and route.endpoint and route.endpoint.__doc__:
+                summary = route.endpoint.__doc__.strip().split("\n")[0]
+            if not summary:
+                if route.path == "/":
+                    summary = "Root service metadata and online status"
+                elif route.path == "/health":
+                    summary = "Liveness probe for health monitoring"
+                elif route.path == "/ready":
+                    summary = "Readiness probe verifying subsystem operational readiness"
+
             summary = summary.replace("|", "\\|").strip()
-
-            lines.append(f"| `{method.upper()}` | `{path}` | `{model_name}` | {summary} |")
+            lines.append(f"| `{method}` | `{route.path}` | {tag} | {summary} |")
 
     content = "\n".join(lines) + "\n"
     with open(dest, "w", encoding="utf-8") as f:
