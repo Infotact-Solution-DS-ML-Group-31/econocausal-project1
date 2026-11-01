@@ -54,3 +54,19 @@ A causal analysis would require additional decisions and investigation, includin
 - Appropriate causal estimation and robustness checks.
 
 The current data-engineering and exploratory-analysis work should therefore be treated as preparation for further research, not as a completed causal pricing model.
+
+## 10. Duplicate-row sensitivity analysis
+
+The prepared transaction dataset contains 12,051 exact duplicate rows, which were retained in the primary analysis.
+
+A separate sensitivity analysis was conducted on the four shortlisted products. Of 10,334 candidate transaction rows, 39 were exact duplicates.
+
+Comparing monthly summaries before and after removing exact duplicate rows showed:
+
+- No change in monthly median unit prices across all 100 product-month records.
+- A reduction of 214 units in total quantity sold.
+- A reduction of £571.51 in gross line value.
+
+The results indicate that the shortlisted products' monthly median-price patterns are robust to the removal of exact duplicate rows. However, quantity and gross line-value measures are affected.
+
+The sensitivity analysis does not establish whether the duplicate records represent data-entry errors or legitimate repeated transaction lines. Therefore, the primary prepared dataset retains them, and the duplicate impact is documented separately.
