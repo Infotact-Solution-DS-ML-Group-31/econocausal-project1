@@ -110,7 +110,7 @@ For product 47566, only 3 of 34 transaction rows in August 2010 and 35 of 72 row
 
 For product 48138 in December 2009, only two transaction rows were available, and just one had an identified Customer ID. This makes the monthly median particularly sensitive to individual observations.
 
-The analysis also found differences of 5,771 units in total quantity sold and £66,959.05 in gross line value when comparing all transactions against identified-customer transactions only.
+The analysis also found differences of 8,767 units in total quantity sold and £66,959.05 in gross line value when comparing all transactions against identified-customer transactions only.
 
 These results show that excluding transactions with missing Customer IDs can alter some monthly median-price observations and substantially change sales aggregates. Therefore, transactions with missing Customer IDs remain included in the primary product-level analysis.
 
