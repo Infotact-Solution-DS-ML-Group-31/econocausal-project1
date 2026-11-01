@@ -1,33 +1,80 @@
-## Exploratory Data Analysis
+# Results
 
-   The Online Retail II workbook was combined into a dataset containing 1,067,371 source rows. The positive-sales filtering step produced 1,040,749 rows.
+## 1. Dataset preparation
 
-   Initial diagnostics identified 12,133 exact duplicate source rows, 243,007 rows with missing customer IDs, 4,382 rows with missing descriptions, and records with nonpositive quantities or prices. These issues were investigated before defining the positive-sales analysis subset.
+The Online Retail II workbook contained 1,067,371 transaction rows across its two sheets.
 
-   Visual EDA generated three charts: monthly gross line value, unit-price distribution, and transaction-line quantity distribution. The distribution charts display values up to the 99th percentile for readability, while the underlying dataset retains its observations.
+After excluding cancellation invoices, nonpositive quantities, nonpositive prices, and special stock codes, the prepared transaction dataset contained 1,040,749 rows.
 
-   The price and quantity 99th percentiles were 18.00 and 100 units, respectively. The monthly series contains 25 periods.
+## 2. Initial data-quality findings
 
-   **Limitation:** These are descriptive results. They do not establish a causal effect of price on demand. A causal analysis requires a defensible treatment definition, appropriate confounders, and a justified identification strategy.
+The initial dataset inspection identified:
 
-   ## Candidate Product-Month Panel Validation
+- 12,133 exact duplicate source rows.
+- 243,007 rows with missing customer IDs.
+- 4,382 rows with missing product descriptions.
+- 22,950 rows with nonpositive quantities.
+- 6,207 rows with nonpositive prices.
+- 19,494 cancellation invoice rows.
 
-### Dataset construction
+These findings informed the data-preparation and exploratory-analysis process.
 
-A candidate product-month panel was constructed from the prepared Online Retail II transaction dataset for four products: `20685`, `47566`, `48138`, and `85099B`.
+## 3. Exploratory data analysis
 
-The panel contains **100 rows**, covering 25 consecutive months from December 2009 through December 2011 for each product.
+Three visualizations were generated:
 
-### Validation results
+- Monthly gross line value.
+- Unit-price distribution.
+- Transaction-line quantity distribution.
 
-- Duplicate product-month keys: 0
-- Missing calendar months: 0 for all four products
-- Missing values in the checked core measures: 0
-- Nonpositive values in the checked core measures: 0
+The 99th percentile of unit price was 18.00, while the 99th percentile of transaction-line quantity was 100 units. Distribution charts were limited to these percentiles for readability; the underlying dataset was not truncated for this purpose.
 
-Core measures checked were transaction count, median unit price, total quantity sold, and gross line value.
+The monthly gross line value visualization covers 25 calendar months.
 
-### Consecutive-month median-price changes
+## 4. Product candidate screening
+
+The monthly product-price analysis produced:
+
+| Measure | Result |
+|---|---:|
+| Transaction rows after analysis exclusions | 1,037,391 |
+| Product codes analysed | 4,908 |
+| Product-month records | 66,958 |
+| Products meeting screening criteria | 1,570 |
+
+The screening criteria required at least 100 transaction rows, at least six active months, and more than one distinct monthly median price.
+
+## 5. Shortlisted products
+
+Four products were selected for focused descriptive analysis:
+
+| Stock code | Active months | Transaction rows | Distinct monthly median prices |
+|---|---:|---:|---:|
+| 85099B | 25 | 4,124 | 2 |
+| 47566 | 25 | 2,740 | 3 |
+| 20685 | 25 | 1,769 | 4 |
+| 48138 | 25 | 1,701 | 5 |
+
+Each shortlisted product has observations in all 25 calendar months from December 2009 through December 2011.
+
+The products show different levels of monthly median-price variation, making them useful candidates for comparative descriptive analysis.
+
+## 6. Candidate panel validation
+
+The final candidate product-month panel contains 100 rows, representing four products across 25 months.
+
+Validation results:
+
+- Duplicate product-month keys: 0.
+- Missing calendar months: 0 for all four products.
+- Missing values in checked core measures: 0.
+- Nonpositive values in checked core measures: 0.
+
+The checked core measures were transaction-row count, median unit price, total quantity sold, and gross line value.
+
+## 7. Consecutive-month median-price changes
+
+The panel contains the following nonzero consecutive-month changes in monthly median unit price:
 
 | Stock code | Number of changes |
 |---|---:|
@@ -36,12 +83,10 @@ Core measures checked were transaction count, median unit price, total quantity 
 | 48138 | 4 |
 | 85099B | 1 |
 
-A price change is counted only when a product's monthly median price differs from the previous consecutive calendar month's median.
+These counts describe observed changes in monthly median prices. They do not measure causal price effects.
 
-### Interpretation and limitations
+## 8. Overall outcome
 
-The panel passes basic structural and numeric validation. This does not establish that the observed price changes are exogenous or that the panel identifies a causal price effect.
+The data-engineering and exploratory-analysis work produced a cleaned transaction dataset, descriptive visualizations, a monthly product-price screening dataset, a four-product candidate panel, and automated structural and numeric validation.
 
-Online Retail II records completed transactions rather than all purchase opportunities and prices offered to customers. Consequently, total quantity sold is an observed sales outcome, not a direct measure of all customer demand. Product-description variation and within-month price dispersion also warrant further investigation.
-
-The panel is suitable for candidate screening and descriptive analysis. Causal estimation requires a defensible identification strategy, a justified treatment and outcome definition, and appropriate confounder selection.
+The resulting panel provides a reproducible foundation for further descriptive analysis and future causal research, subject to the limitations documented separately.

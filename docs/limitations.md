@@ -1,0 +1,56 @@
+# Limitations
+
+## 1. Transaction data does not capture all demand
+
+The Online Retail II dataset records completed transactions. It does not record every product viewed, every purchase opportunity, or every price offered to customers.
+
+Therefore, observed quantity sold should not be interpreted as a complete measure of customer demand.
+
+## 2. Missing customer information
+
+A substantial number of transaction rows have missing customer IDs. This limits customer-level analysis, customer segmentation, and the ability to construct reliable individual purchase histories for all transactions.
+
+## 3. Duplicate transaction rows
+
+The initial inspection identified 12,133 exact duplicate source rows. These rows were retained in the prepared dataset. Their presence may affect transaction counts and aggregated sales measures.
+
+The impact of these duplicates should be considered when interpreting descriptive results.
+
+## 4. Product-description variation
+
+Some product codes have multiple descriptions. This may reflect changes in descriptions or inconsistencies in product records. Product-code-based aggregation does not automatically resolve these differences.
+
+## 5. Price variation does not establish causality
+
+Changes in monthly median unit prices are observational. They may be associated with changes in product mix, transaction composition, customer composition, or other factors.
+
+The current analysis does not establish that price changes caused changes in quantities sold.
+
+## 6. Monthly aggregation hides transaction-level variation
+
+Aggregating transactions by product and month simplifies analysis but hides differences in transaction timing, individual prices, quantities, and customer behavior within each month.
+
+Monthly median prices and total quantities therefore provide summaries rather than a complete representation of transaction-level behavior.
+
+## 7. Candidate selection is a screening process
+
+The candidate-screening criteria identify products with sufficient transaction volume, activity across multiple months, and variation in monthly median prices.
+
+Meeting these criteria does not guarantee that a product is suitable for causal estimation. The four shortlisted products were chosen for focused descriptive analysis, not through a validated causal identification procedure.
+
+## 8. Panel validation has a limited scope
+
+The candidate panel passed checks for duplicate product-month keys, calendar continuity, and missing or nonpositive values in selected core numeric measures.
+
+These checks establish basic structural and numeric consistency. They do not establish that the data is free from all errors, measurement problems, selection bias, or confounding.
+
+## 9. Further work required for causal estimation
+
+A causal analysis would require additional decisions and investigation, including:
+
+- A defensible definition of price treatment and sales outcome.
+- Identification and justification of relevant confounding variables.
+- Assessment of whether the available data supports the required identification assumptions.
+- Appropriate causal estimation and robustness checks.
+
+The current data-engineering and exploratory-analysis work should therefore be treated as preparation for further research, not as a completed causal pricing model.
