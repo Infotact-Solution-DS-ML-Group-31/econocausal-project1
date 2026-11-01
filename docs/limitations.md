@@ -91,3 +91,27 @@ The missing customer identifier rate is not uniform across the four products. Pr
 Transactions with missing Customer IDs were retained in the product-level analysis because product code, transaction date, price, and quantity are available for the relevant records.
 
 However, missing customer identifiers restrict reliable customer-level analysis, customer segmentation, and customer-level causal modelling. The reasons for the missing identifiers have not been established, so the missingness mechanism should not be assumed to be random.
+
+## 12. Missing Customer ID sensitivity analysis
+
+A sensitivity analysis compared monthly product-level summaries using all candidate transactions against summaries using only transactions with identified Customer IDs.
+
+Among the 100 product-month records, three had different monthly median unit prices after excluding transactions with missing Customer IDs.
+
+The affected records were:
+
+| Stock code | Month | All-transactions median | Identified-customer median | Difference |
+|---|---|---:|---:|---:|
+| 47566 | 2010-08 | 8.47 | 4.65 | 3.82 |
+| 47566 | 2010-12 | 8.47 | 4.65 | 3.82 |
+| 48138 | 2009-12 | 10.31 | 6.75 | 3.56 |
+
+For product 47566, only 3 of 34 transaction rows in August 2010 and 35 of 72 rows in December 2010 had identified Customer IDs.
+
+For product 48138 in December 2009, only two transaction rows were available, and just one had an identified Customer ID. This makes the monthly median particularly sensitive to individual observations.
+
+The analysis also found differences of 5,771 units in total quantity sold and £66,959.05 in gross line value when comparing all transactions against identified-customer transactions only.
+
+These results show that excluding transactions with missing Customer IDs can alter some monthly median-price observations and substantially change sales aggregates. Therefore, transactions with missing Customer IDs remain included in the primary product-level analysis.
+
+The sensitivity analysis does not establish the mechanism behind missing customer identifiers or prove that identified-customer transactions are representative of all transactions.
