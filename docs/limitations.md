@@ -70,3 +70,24 @@ Comparing monthly summaries before and after removing exact duplicate rows showe
 The results indicate that the shortlisted products' monthly median-price patterns are robust to the removal of exact duplicate rows. However, quantity and gross line-value measures are affected.
 
 The sensitivity analysis does not establish whether the duplicate records represent data-entry errors or legitimate repeated transaction lines. Therefore, the primary prepared dataset retains them, and the duplicate impact is documented separately.
+
+## 11. Missing customer identifier analysis
+
+The prepared transaction dataset contains 235,941 rows with missing Customer IDs, representing 22.67% of all 1,040,749 prepared rows.
+
+Among the four shortlisted products, 1,793 of 10,334 transaction rows have missing Customer IDs, representing 17.35%.
+
+The missing-ID rates vary across shortlisted products:
+
+| Stock code | Total rows | Missing Customer IDs | Missing percentage |
+|---|---:|---:|---:|
+| 20685 | 1,769 | 254 | 14.36% |
+| 47566 | 2,740 | 619 | 22.59% |
+| 48138 | 1,701 | 156 | 9.17% |
+| 85099B | 4,124 | 764 | 18.53% |
+
+The missing customer identifier rate is not uniform across the four products. Product 47566 has the highest rate, while product 48138 has the lowest.
+
+Transactions with missing Customer IDs were retained in the product-level analysis because product code, transaction date, price, and quantity are available for the relevant records.
+
+However, missing customer identifiers restrict reliable customer-level analysis, customer segmentation, and customer-level causal modelling. The reasons for the missing identifiers have not been established, so the missingness mechanism should not be assumed to be random.
