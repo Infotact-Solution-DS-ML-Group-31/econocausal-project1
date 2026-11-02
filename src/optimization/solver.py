@@ -6,6 +6,7 @@ from scipy.optimize import linprog
 
 from src.api.schemas import OptimizationObjective
 from src.optimization.base import BaseAllocationSolver, OptimizationResult
+from src.optimization.cache import AllocationCache
 from src.optimization.constraints import prepare_feasible_inputs
 
 
@@ -22,6 +23,7 @@ class SciPyConstrainedSolver(BaseAllocationSolver):
         objective: OptimizationObjective = OptimizationObjective.MAXIMIZE_PROFIT,
         min_spend_per_user: float = 0.0,
         integer_rounding: bool = True,
+        cache: Optional[AllocationCache] = None,
     ):
         super().__init__(budget=budget, min_spend_per_user=min_spend_per_user)
         if isinstance(objective, str):
@@ -29,6 +31,7 @@ class SciPyConstrainedSolver(BaseAllocationSolver):
         else:
             self.objective = objective
         self.integer_rounding = integer_rounding
+        self.cache = cache
 
     def solve(
         self,
@@ -37,7 +40,7 @@ class SciPyConstrainedSolver(BaseAllocationSolver):
         customer_ids: Optional[np.ndarray] = None,
         customer_values: Optional[np.ndarray] = None,
     ) -> OptimizationResult:
-        """Execute linear programming optimization over eligible customers.
+        """Execute linear programming optimization over eligible customers, with optional caching.
 
         Args:
             treatment_effects: Array of predicted ITE (uplift delta) values (1D or 2D).
@@ -49,6 +52,66 @@ class SciPyConstrainedSolver(BaseAllocationSolver):
         Returns:
             OptimizationResult containing allocation vector or matrix, financial metrics, and metadata.
         """
+        te_arr = np.asarray(treatment_effects, dtype=np.float64)
+        cv = (
+            np.asarray(customer_values, dtype=np.float64)
+            if customer_values is not None
+            else np.full(te_arr.shape[0], 50.0, dtype=np.float64)
+        )
+        tc_arr = np.asarray(treatment_costs, dtype=np.float64)
+
+        cache_key = None
+        if self.cache is not None:
+            cache_key = self.cache.compute_key(
+                treatment_effects=te_arr,
+                treatment_costs=tc_arr,
+                customer_values=cv,
+                budget=self.budget,
+                objective=self.objective,
+            )
+            cached_result = self.cache.get(cache_key)
+            if cached_result is not None:
+                meta = dict(cached_result.metadata)
+                meta["cache_hit"] = True
+                return OptimizationResult(
+                    success=cached_result.success,
+                    status_message=cached_result.status_message,
+                    total_spend=cached_result.total_spend,
+                    expected_incremental_revenue=cached_result.expected_incremental_revenue,
+                    allocations=cached_result.allocations.copy(),
+                    metadata=meta,
+                )
+
+        result = self._solve_internal(
+            treatment_effects=treatment_effects,
+            treatment_costs=treatment_costs,
+            customer_ids=customer_ids,
+            customer_values=cv,
+        )
+
+        if self.cache is not None and cache_key is not None:
+            self.cache.set(cache_key, result)
+            meta = dict(result.metadata)
+            meta["cache_hit"] = False
+            return OptimizationResult(
+                success=result.success,
+                status_message=result.status_message,
+                total_spend=result.total_spend,
+                expected_incremental_revenue=result.expected_incremental_revenue,
+                allocations=result.allocations,
+                metadata=meta,
+            )
+
+        return result
+
+    def _solve_internal(
+        self,
+        treatment_effects: np.ndarray,
+        treatment_costs: np.ndarray,
+        customer_ids: Optional[np.ndarray] = None,
+        customer_values: Optional[np.ndarray] = None,
+    ) -> OptimizationResult:
+        """Internal uncached LP solver execution."""
         te_arr = np.asarray(treatment_effects, dtype=np.float64)
         cv = (
             np.asarray(customer_values, dtype=np.float64)

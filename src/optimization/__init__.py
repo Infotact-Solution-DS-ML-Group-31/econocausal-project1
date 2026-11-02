@@ -2,6 +2,7 @@
 
 from src.optimization.base import BaseAllocationSolver, OptimizationResult
 from src.optimization.baseline import BlanketDiscountSolver, GreedyROISolver
+from src.optimization.cache import AllocationCache
 from src.optimization.constraints import (
     ValidatedSolverInputs,
     prepare_feasible_inputs,
@@ -50,5 +51,6 @@ __all__ = [
     "generate_executive_report",
     "MonteCarloSimulationResult",
     "run_policy_monte_carlo",
+    "AllocationCache",
 ]
 
