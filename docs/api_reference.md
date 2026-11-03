@@ -17,6 +17,7 @@
 | `POST` | `/api/v1/uplift-curve` | Optimization & Allocation | Generate cumulative uplift curve and Qini metrics for campaign evaluation |
 | `POST` | `/api/v1/executive-report` | Optimization & Allocation | Generate executive summary report with causal quadrant segmentation |
 | `POST` | `/api/v1/simulate-confidence` | Optimization & Allocation | Run Monte Carlo simulation to quantify policy risk and confidence bounds |
+| `POST` | `/api/v1/recommend-budget` | Optimization & Allocation | Detect optimal budget knee point and analyze diminishing returns |
 | `GET` | `/` | General | Root service metadata and online status |
 | `GET` | `/health` | Monitoring | Liveness probe for health monitoring |
 | `GET` | `/ready` | Monitoring | Readiness probe verifying subsystem operational readiness |

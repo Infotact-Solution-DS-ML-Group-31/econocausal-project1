@@ -468,6 +468,48 @@
         }
       }
     },
+    "/api/v1/recommend-budget": {
+      "post": {
+        "tags": [
+          "Optimization & Allocation"
+        ],
+        "summary": "Detect optimal budget knee point and analyze diminishing returns",
+        "description": "Evaluate budget allocation frontier and detect optimal knee-point budget.\n\nSweeps candidate budgets from min_budget to max_budget across discrete steps,\nsolves the constrained allocation problem for each budget using SciPyConstrainedSolver,\nand identifies the frontier knee/elbow point via vector distance analysis.",
+        "operationId": "recommend_budget_api_v1_recommend_budget_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BudgetRecommendationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetRecommendationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/": {
       "get": {
         "tags": [
@@ -542,6 +584,104 @@
   },
   "components": {
     "schemas": {
+      "BudgetRecommendationRequest": {
+        "properties": {
+          "customers": {
+            "items": {
+              "$ref": "#/components/schemas/CustomerDataPoint"
+            },
+            "type": "array",
+            "minItems": 3,
+            "title": "Customers",
+            "description": "List of customers with ITE scores (at least 3)"
+          },
+          "min_budget": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Min Budget",
+            "description": "Lower bound of candidate budget range",
+            "default": 10.0
+          },
+          "max_budget": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Max Budget",
+            "description": "Upper bound of candidate budget range",
+            "default": 500.0
+          },
+          "steps": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 3.0,
+            "title": "Steps",
+            "description": "Number of budget evaluation points along frontier",
+            "default": 10
+          },
+          "objective": {
+            "$ref": "#/components/schemas/OptimizationObjective",
+            "description": "Target business objective",
+            "default": "maximize_profit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customers"
+        ],
+        "title": "BudgetRecommendationRequest",
+        "description": "Payload to evaluate budget frontier and detect optimal knee-point budget."
+      },
+      "BudgetRecommendationResponse": {
+        "properties": {
+          "recommended_budget": {
+            "type": "number",
+            "title": "Recommended Budget",
+            "description": "Recommended optimal budget at the frontier knee point"
+          },
+          "expected_net_profit": {
+            "type": "number",
+            "title": "Expected Net Profit",
+            "description": "Expected net profit at recommended budget"
+          },
+          "expected_incremental_revenue": {
+            "type": "number",
+            "title": "Expected Incremental Revenue",
+            "description": "Expected incremental revenue at recommended budget"
+          },
+          "targeted_customers_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Targeted Customers Count",
+            "description": "Number of customers targeted at recommended budget"
+          },
+          "marginal_roi": {
+            "type": "number",
+            "title": "Marginal Roi",
+            "description": "Post-knee marginal ROI degradation"
+          },
+          "diminishing_returns_ratio": {
+            "type": "number",
+            "title": "Diminishing Returns Ratio",
+            "description": "Ratio of post-knee marginal ROI to pre-knee marginal ROI"
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation",
+            "description": "Executive natural language summary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recommended_budget",
+          "expected_net_profit",
+          "expected_incremental_revenue",
+          "targeted_customers_count",
+          "marginal_roi",
+          "diminishing_returns_ratio",
+          "explanation"
+        ],
+        "title": "BudgetRecommendationResponse",
+        "description": "Executive knee-point budget recommendation along an allocation frontier."
+      },
       "CustomerAllocation": {
         "properties": {
           "customer_id": {

@@ -298,6 +298,68 @@ class TestOptimizationRoutes(unittest.TestCase):
         self.assertEqual(data["allocations"][0]["assigned_discount"], 0.0)
         self.assertFalse(data["allocations"][0]["is_targeted"])
 
+    def test_recommend_budget_endpoint_success(self):
+        """POST /api/v1/recommend-budget returns HTTP 200 and a valid recommended_budget."""
+        customers = generate_mock_customers(30)
+        payload = {
+            "customers": [c.model_dump() for c in customers],
+            "min_budget": 50.0,
+            "max_budget": 300.0,
+            "steps": 10,
+            "objective": "maximize_profit",
+        }
+        response = self.client.post("/api/v1/recommend-budget", json=payload)
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+        self.assertIn("recommended_budget", data)
+        self.assertGreaterEqual(data["recommended_budget"], 50.0)
+        self.assertLessEqual(data["recommended_budget"], 300.0)
+        self.assertIn("expected_net_profit", data)
+        self.assertIn("expected_incremental_revenue", data)
+        self.assertIn("targeted_customers_count", data)
+        self.assertIsInstance(data["targeted_customers_count"], int)
+        self.assertIn("marginal_roi", data)
+        self.assertIn("diminishing_returns_ratio", data)
+        self.assertIn("explanation", data)
+        self.assertIsInstance(data["explanation"], str)
+        self.assertGreater(len(data["explanation"]), 0)
+
+    def test_recommend_budget_invalid_budget_range_returns_422(self):
+        """POST /api/v1/recommend-budget returns HTTP 422 when max_budget <= min_budget."""
+        customers = generate_mock_customers(10)
+        # Case 1: max_budget < min_budget
+        payload_less = {
+            "customers": [c.model_dump() for c in customers],
+            "min_budget": 200.0,
+            "max_budget": 100.0,
+            "steps": 10,
+        }
+        response_less = self.client.post("/api/v1/recommend-budget", json=payload_less)
+        self.assertEqual(response_less.status_code, 422)
+
+        # Case 2: max_budget == min_budget
+        payload_equal = {
+            "customers": [c.model_dump() for c in customers],
+            "min_budget": 150.0,
+            "max_budget": 150.0,
+            "steps": 10,
+        }
+        response_equal = self.client.post("/api/v1/recommend-budget", json=payload_equal)
+        self.assertEqual(response_equal.status_code, 422)
+
+    def test_recommend_budget_fewer_than_three_customers_returns_422(self):
+        """POST /api/v1/recommend-budget returns HTTP 422 when fewer than 3 customers provided."""
+        customers = generate_mock_customers(2)
+        payload = {
+            "customers": [c.model_dump() for c in customers],
+            "min_budget": 10.0,
+            "max_budget": 100.0,
+            "steps": 5,
+        }
+        response = self.client.post("/api/v1/recommend-budget", json=payload)
+        self.assertEqual(response.status_code, 422)
+
 
 if __name__ == "__main__":
     unittest.main()

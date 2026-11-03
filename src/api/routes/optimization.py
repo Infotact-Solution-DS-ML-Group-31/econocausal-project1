@@ -20,6 +20,8 @@ from src.api.schemas import (
     UpliftCurveRequest,
     UpliftCurveResponse,
     UpliftDecilePoint as DecileSchema,
+    BudgetRecommendationRequest,
+    BudgetRecommendationResponse,
 )
 from src.api.pipeline_bridge import (
     allocate_discounts,
@@ -29,6 +31,7 @@ from src.api.pipeline_bridge import (
 from src.optimization.base import OptimizationResult
 from src.optimization.baseline import BlanketDiscountSolver
 from src.optimization.drift import evaluate_distribution_drift
+from src.optimization.knee_point import FrontierPoint, detect_frontier_knee_point
 from src.optimization.reporting import generate_executive_report
 from src.optimization.simulation import run_policy_monte_carlo
 from src.optimization.solver import SciPyConstrainedSolver
@@ -415,4 +418,66 @@ async def simulate_confidence(request: MonteCarloSimulationRequest) -> MonteCarl
         ci_upper_95pct=sim_result.ci_upper_95pct,
         probability_of_positive_roi=sim_result.probability_of_positive_roi,
     )
+
+
+@router.post(
+    "/recommend-budget",
+    response_model=BudgetRecommendationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Detect optimal budget knee point and analyze diminishing returns",
+)
+async def recommend_budget(request: BudgetRecommendationRequest) -> BudgetRecommendationResponse:
+    """Evaluate budget allocation frontier and detect optimal knee-point budget.
+
+    Sweeps candidate budgets from min_budget to max_budget across discrete steps,
+    solves the constrained allocation problem for each budget using SciPyConstrainedSolver,
+    and identifies the frontier knee/elbow point via vector distance analysis.
+    """
+    customer_ids = np.array([c.customer_id for c in request.customers])
+    ite_vector = np.array([c.predicted_ite for c in request.customers], dtype=np.float64)
+    cost_vector = np.array([c.treatment_cost for c in request.customers], dtype=np.float64)
+    value_vector = np.array([c.customer_value for c in request.customers], dtype=np.float64)
+
+    budget_steps = np.linspace(request.min_budget, request.max_budget, request.steps)
+    frontier_points: List[FrontierPoint] = []
+
+    for b in budget_steps:
+        budget_val = float(b)
+        solver = SciPyConstrainedSolver(
+            budget=budget_val,
+            objective=request.objective,
+            integer_rounding=True,
+        )
+        result = solver.solve(
+            treatment_effects=ite_vector,
+            treatment_costs=cost_vector,
+            customer_ids=customer_ids,
+            customer_values=value_vector,
+        )
+        total_spend = float(result.total_spend)
+        exp_inc_rev = float(result.expected_incremental_revenue)
+        exp_net_profit = float(exp_inc_rev - total_spend)
+        targeted_count = int(np.sum(result.allocations > 0))
+
+        frontier_points.append(
+            FrontierPoint(
+                budget=budget_val,
+                expected_net_profit=round(exp_net_profit, 4),
+                expected_incremental_revenue=round(exp_inc_rev, 4),
+                targeted_customers_count=targeted_count,
+            )
+        )
+
+    rec = detect_frontier_knee_point(frontier_points)
+
+    return BudgetRecommendationResponse(
+        recommended_budget=rec.recommended_budget,
+        expected_net_profit=rec.expected_net_profit,
+        expected_incremental_revenue=rec.expected_incremental_revenue,
+        targeted_customers_count=rec.targeted_customers_count,
+        marginal_roi=rec.marginal_roi,
+        diminishing_returns_ratio=rec.diminishing_returns_ratio,
+        explanation=rec.explanation,
+    )
+
 

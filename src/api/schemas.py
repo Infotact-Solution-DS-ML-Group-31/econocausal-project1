@@ -292,3 +292,40 @@ class MonteCarloSimulationResponse(BaseModel):
         ..., ge=0.0, le=1.0, description="Empirical probability of achieving positive net profit"
     )
 
+class BudgetRecommendationRequest(BaseModel):
+    """Payload to evaluate budget frontier and detect optimal knee-point budget."""
+    customers: List[CustomerDataPoint] = Field(
+        ..., min_length=3, description="List of customers with ITE scores (at least 3)"
+    )
+    min_budget: float = Field(default=10.0, gt=0.0, description="Lower bound of candidate budget range")
+    max_budget: float = Field(default=500.0, gt=0.0, description="Upper bound of candidate budget range")
+    steps: int = Field(default=10, ge=3, le=50, description="Number of budget evaluation points along frontier")
+    objective: OptimizationObjective = Field(
+        default=OptimizationObjective.MAXIMIZE_PROFIT,
+        description="Target business objective",
+    )
+
+    @field_validator("customers")
+    @classmethod
+    def validate_unique_customer_ids(cls, v: List[CustomerDataPoint]) -> List[CustomerDataPoint]:
+        ids = [c.customer_id for c in v]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Duplicate customer_id detected in customer payload.")
+        return v
+
+    @model_validator(mode="after")
+    def validate_budget_range(self) -> "BudgetRecommendationRequest":
+        if self.max_budget <= self.min_budget:
+            raise ValueError("max_budget must be strictly greater than min_budget.")
+        return self
+
+
+class BudgetRecommendationResponse(BaseModel):
+    """Executive knee-point budget recommendation along an allocation frontier."""
+    recommended_budget: float = Field(..., description="Recommended optimal budget at the frontier knee point")
+    expected_net_profit: float = Field(..., description="Expected net profit at recommended budget")
+    expected_incremental_revenue: float = Field(..., description="Expected incremental revenue at recommended budget")
+    targeted_customers_count: int = Field(..., ge=0, description="Number of customers targeted at recommended budget")
+    marginal_roi: float = Field(..., description="Post-knee marginal ROI degradation")
+    diminishing_returns_ratio: float = Field(..., description="Ratio of post-knee marginal ROI to pre-knee marginal ROI")
+    explanation: str = Field(..., description="Executive natural language summary")
