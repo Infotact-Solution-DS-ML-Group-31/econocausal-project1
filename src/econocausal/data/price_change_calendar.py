@@ -16,21 +16,36 @@ def main():
     if missing:
         raise ValueError(f"Missing columns: {sorted(missing)}")
 
+    df["Month"] = pd.PeriodIndex(df["Month"], freq="M")
     df = df.sort_values(["StockCode", "Month"]).copy()
 
-    df["previous_price"] = (
-        df.groupby("StockCode")["median_price"].shift(1)
-    )
-    df["price_changed"] = (
-        df["previous_price"].notna()
-        & df["median_price"].ne(df["previous_price"])
-    )
+    grouped = df.groupby("StockCode", observed=True)
 
-    changes = df[df["price_changed"]].copy()
+    df["previous_price"] = grouped["median_price"].shift(1)
+    df["previous_month"] = grouped["Month"].shift(1)
+
+    # Retain only consecutive calendar months.
+    consecutive = (
+        df["Month"].astype("int64")
+        - df["previous_month"].astype("int64")
+    ) == 1
+
+    changes = df[
+        consecutive
+        & df["previous_price"].notna()
+        & df["median_price"].ne(df["previous_price"])
+    ].copy()
+
+    changes["absolute_change"] = (
+        changes["median_price"] - changes["previous_price"]
+    ).abs()
 
     print(f"Product-month records: {len(df):,}")
     print(f"Products: {df['StockCode'].nunique():,}")
-    print(f"Observed month-to-month median-price changes: {len(changes):,}")
+    print(
+        "Consecutive-month median-price changes: "
+        f"{len(changes):,}"
+    )
 
     print("\n=== Changes by month ===")
     print(
@@ -39,17 +54,25 @@ def main():
             products_with_price_changes=("StockCode", "nunique"),
             total_change_records=("StockCode", "size"),
         )
-        .sort_values("products_with_price_changes", ascending=False)
+        .sort_values(
+            "products_with_price_changes",
+            ascending=False
+        )
         .head(15)
         .to_string()
     )
 
-    print("\n=== Largest absolute median-price changes ===")
-    changes["absolute_change"] = (
-        changes["median_price"] - changes["previous_price"]
-    ).abs()
+    print("\n=== Largest changes with at least 10 rows ===")
+
+    robust = changes[
+        (changes["transaction_rows"] >= 10)
+    ].copy()
+
     print(
-        changes.sort_values("absolute_change", ascending=False)[
+        robust.sort_values(
+            "absolute_change",
+            ascending=False
+        )[
             [
                 "StockCode",
                 "Month",

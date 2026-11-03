@@ -333,3 +333,63 @@ The monthly price-change robustness analysis provides an additional assessment o
 
 It complements the candidate product screening and supports more informed interpretation of historical price variation.
 
+## Calendar-Based Monthly Price-Change Analysis
+
+### Objective
+
+The objective was to examine the timing and magnitude of historical monthly median-price changes across products.
+
+### Methodology
+
+The analysis calculated the previous observed median price for each product and compared it with the current month's median price.
+
+An important calendar continuity condition was applied: only observations from consecutive calendar months were included. Comparisons across missing months were excluded.
+
+The analysis identified:
+- Products with changing monthly median prices.
+- Months with the highest number of products experiencing price changes.
+- Products with the largest absolute median-price changes.
+
+For the largest-change analysis, the current month was required to contain at least 10 transaction rows.
+
+### Results
+
+The monthly product-price dataset contained 66,958 product-month records across 4,908 products.
+
+After applying the consecutive-calendar-month condition, 13,886 median-price changes were identified.
+
+The months with the highest numbers of products showing price changes included:
+
+| Month | Products with price changes |
+|---|---:|
+| January 2011 | 1,145 |
+| January 2010 | 1,020 |
+| December 2011 | 772 |
+| February 2011 | 767 |
+| December 2010 | 758 |
+
+The largest absolute changes among observations with at least 10 transaction rows in the current month included:
+
+| Product | Month | Previous median price | Current median price | Absolute change |
+|---|---|---:|---:|---:|
+| 84823 | 2010-12 | 39.95 | 7.95 | 32.00 |
+| 84467 | 2010-03 | 39.95 | 12.75 | 27.20 |
+| 84016 | 2010-05 | 25.53 | 0.42 | 25.11 |
+| 20785 | 2010-05 | 58.25 | 34.00 | 24.25 |
+| 20787 | 2010-05 | 58.25 | 34.00 | 24.25 |
+
+All monetary values are reported in GBP.
+
+### Interpretation and Limitations
+
+The analysis shows that historical product-level median prices changed frequently and that the number of observed changes varied across calendar months.
+
+Requiring consecutive calendar months prevents misleading comparisons across gaps in product observations.
+
+The minimum transaction threshold for the largest-change analysis applies only to the current month. It does not guarantee that the previous month has the same transaction volume.
+
+Observed price changes are descriptive findings. They do not establish why prices changed or demonstrate a causal discount effect.
+
+### Conclusion
+
+The calendar-based analysis provides additional insight into the timing and magnitude of historical product-level price changes. It complements the transaction-volume robustness analysis and supports more careful interpretation of monthly price variation.
