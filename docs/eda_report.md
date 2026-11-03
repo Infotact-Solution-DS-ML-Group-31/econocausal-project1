@@ -1,4 +1,4 @@
-# EconoCausal — Exploratory Data Analysis Report
+﻿# EconoCausal â€” Exploratory Data Analysis Report
 
 ## 1. Project overview
 
@@ -120,7 +120,7 @@ A product-month panel was constructed for the four shortlisted products.
 | Products | 4 |
 | Calendar months per product | 25 |
 | Total product-month records | 100 |
-| Period | December 2009 – December 2011 |
+| Period | December 2009 â€“ December 2011 |
 
 The panel contains:
 
@@ -174,7 +174,7 @@ A separate analysis examined the four shortlisted products:
 | Rows after deduplication | 10,295 |
 | Product-month median prices changed | 0 of 100 |
 | Quantity difference | 214 units |
-| Gross line-value difference | £571.51 |
+| Gross line-value difference | Â£571.51 |
 
 No monthly median unit prices changed after removing exact duplicate rows.
 
@@ -230,7 +230,7 @@ The overall differences between all transactions and identified-customer transac
 | Measure | Difference |
 |---|---:|
 | Total quantity sold | 8,767 units |
-| Gross line value | £66,959.05 |
+| Gross line value | Â£66,959.05 |
 
 The results show that excluding transactions with missing Customer IDs can change some monthly median-price observations and substantially change sales aggregates.
 
@@ -269,3 +269,67 @@ The work provides a foundation for further descriptive analysis and future causa
 Before causal estimation, further work is required to define the price treatment and sales outcome, identify and justify potential confounders, assess identification assumptions, and conduct appropriate robustness checks.
 
 No causal price effect is claimed by this report.
+
+## Monthly Price-Change Robustness Analysis
+
+### Objective
+
+A monthly median price change may be influenced by a small number of transaction observations. To investigate this, a robustness analysis was performed using different minimum transaction-count thresholds in both the current and previous consecutive calendar months.
+
+### Methodology
+
+The analysis used the monthly product price dataset and compared each product's median price with its previous month's median price.
+
+Only consecutive calendar months with different median prices were retained.
+
+The analysis was repeated using minimum transaction counts of 1, 5, 10, 20, and 30 in both months.
+
+Absolute price changes were also calculated to identify the largest observed changes.
+
+### Overall Results
+
+| Minimum transactions in both months | Price changes | Products |
+|---:|---:|---:|
+| 1 | 13,886 | 3,025 |
+| 5 | 4,781 | 1,741 |
+| 10 | 2,303 | 1,043 |
+| 20 | 770 | 461 |
+| 30 | 325 | 215 |
+
+The number of qualifying price changes decreased as the minimum transaction threshold increased.
+
+At a minimum of 10 transactions in both months, 2,303 price changes remained across 1,043 products.
+
+### Shortlisted Product Results
+
+All price values are reported in GBP (£).
+
+All price values are reported in GBP (£).
+
+Using the minimum threshold of 10 transactions in both months, the four shortlisted products showed the following results:
+
+| Product | Qualifying price changes | Largest absolute change |
+|---|---:|---:|
+| 20685 | 3 | 0.74 |
+| 47566 | 5 | 3.82 |
+| 48138 | 3 | 0.74 |
+| 85099B | 1 | 0.13 |
+
+Product 47566 showed repeated changes between monthly median prices of 4.65 and 8.47. This pattern warrants further investigation of its transaction-level price distribution and product descriptions.
+
+### Interpretation
+
+The analysis demonstrates that the number of observed monthly price changes depends substantially on transaction volume.
+
+Applying minimum transaction thresholds reduces the influence of low-volume product-month observations.
+
+However, transaction-count filtering alone does not establish statistical significance, explain the reasons for observed price changes, or identify causal discount effects.
+
+The results should therefore be interpreted as a descriptive robustness assessment of historical monthly price variation.
+
+### Conclusion
+
+The monthly price-change robustness analysis provides an additional assessment of the reliability of observed product-level price movements under different transaction-volume requirements.
+
+It complements the candidate product screening and supports more informed interpretation of historical price variation.
+
