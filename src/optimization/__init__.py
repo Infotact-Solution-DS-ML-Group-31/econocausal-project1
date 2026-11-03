@@ -13,6 +13,11 @@ from src.optimization.drift import (
     calculate_psi,
     evaluate_distribution_drift,
 )
+from src.optimization.knee_point import (
+    FrontierPoint,
+    KneePointRecommendation,
+    detect_frontier_knee_point,
+)
 from src.optimization.reporting import (
     ExecutiveCampaignReport,
     SegmentSummary,
@@ -52,5 +57,8 @@ __all__ = [
     "MonteCarloSimulationResult",
     "run_policy_monte_carlo",
     "AllocationCache",
+    "FrontierPoint",
+    "KneePointRecommendation",
+    "detect_frontier_knee_point",
 ]
 
