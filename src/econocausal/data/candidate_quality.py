@@ -1,4 +1,3 @@
-
 from pathlib import Path
 
 import pandas as pd
@@ -18,7 +17,9 @@ def main():
     df["InvoiceDate"] = pd.to_datetime(df["InvoiceDate"], errors="coerce")
     df["Price"] = pd.to_numeric(df["Price"], errors="coerce")
     df["Quantity"] = pd.to_numeric(df["Quantity"], errors="coerce")
-    df["Month"] = df["InvoiceDate"].dt.to_period("M").astype("string")
+    df["Month"] = pd.PeriodIndex(
+        df["InvoiceDate"].dt.to_period("M"), freq="M"
+    )
 
     df = df[
         df["StockCode"].isin(CANDIDATES)
@@ -41,9 +42,19 @@ def main():
         .sort_values(["StockCode", "Month"])
     )
 
-    monthly["previous_median"] = (
-        monthly.groupby("StockCode")["median_price"].shift(1)
-    )
+    grouped = monthly.groupby("StockCode", observed=True)
+
+    monthly["previous_month"] = grouped["Month"].shift(1)
+    monthly["previous_median"] = grouped["median_price"].shift(1)
+
+    consecutive = (
+        monthly["Month"].astype("int64")
+        - monthly["previous_month"].astype("int64")
+    ) == 1
+
+    # Only calculate price changes across consecutive calendar months.
+    monthly.loc[~consecutive, "previous_median"] = pd.NA
+
     monthly["median_change"] = (
         monthly["median_price"] - monthly["previous_median"]
     )
@@ -51,9 +62,10 @@ def main():
         monthly["median_change"] / monthly["previous_median"] * 100
     )
 
+    monthly["price_iqr"] = monthly["q3_price"] - monthly["q1_price"]
+
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     monthly.to_csv(OUTPUT, index=False)
-    monthly["price_iqr"] = monthly["q3_price"] - monthly["q1_price"]
 
     summary = (
         monthly.groupby("StockCode", observed=True)
@@ -77,7 +89,8 @@ def main():
 
     print("=== Candidate summary ===")
     print(summary.to_string())
-    print("\n=== Monthly price changes ===")
+
+    print("\n=== Consecutive-month price changes ===")
     print(
         monthly.loc[
             monthly["median_change"].notna()
@@ -94,6 +107,7 @@ def main():
             ],
         ].to_string(index=False)
     )
+
     print(f"\nSaved report to: {OUTPUT.relative_to(ROOT)}")
 
 

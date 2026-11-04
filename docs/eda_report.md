@@ -393,3 +393,28 @@ Observed price changes are descriptive findings. They do not establish why price
 ### Conclusion
 
 The calendar-based analysis provides additional insight into the timing and magnitude of historical product-level price changes. It complements the transaction-volume robustness analysis and supports more careful interpretation of monthly price variation.
+
+### Product 47566: Customer-Level Price Consistency and Missing-ID Sensitivity
+
+A supplementary investigation examined transaction-price variation for product 47566 across its 25 active months.
+
+The analysis identified 894 customers with at least one recorded transaction. Of these, 217 customers (24.3%) had more than one observed unit price across the full observation period.
+
+A customer-month consistency analysis produced 1,913 identified customer-month observations. In 1,901 observations (99.37%), the customer had exactly one observed unit price. Only 12 observations (0.63%) contained multiple prices within the same customer-month.
+
+Customer identification varied substantially by month. For example, only 7.14% of transactions in July 2010 and 8.82% in August 2010 had an identified Customer ID.
+
+A sensitivity analysis compared monthly median prices calculated using all transactions against those calculated using only transactions with identified Customer IDs. The monthly medians were identical in 23 of the 25 active months.
+
+Two exceptions were observed:
+
+| Month | All-transaction median | Identified-customer median |
+|---|---:|---:|
+| August 2010 | £8.47 | £4.65 |
+| December 2010 | £8.47 | £4.65 |
+
+The difference in both months was £3.82. These months also had relatively low customer identification rates.
+
+Overall, the findings indicate that missing Customer IDs do not change the monthly median price in most months for this product, but they materially affect the median in August and December 2010. The analysis also shows that observed price variation is generally consistent within identified customer-months.
+
+These findings are descriptive. They do not establish whether price differences resulted from discounts, customer-specific arrangements, or other commercial factors. Missing customer identification and the absence of explicit discount-assignment information remain limitations for causal analysis.
