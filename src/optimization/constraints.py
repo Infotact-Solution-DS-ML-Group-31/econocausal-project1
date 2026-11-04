@@ -85,6 +85,7 @@ def prepare_feasible_inputs(
     customer_values: np.ndarray,
     budget: float,
     require_positive_net_profit: bool = True,
+    max_budget_limit: float = 1_000_000.0,
 ) -> ValidatedSolverInputs:
     """Validate inputs and compute net profit vectors and eligibility masks."""
     te, tc = validate_solver_inputs(
@@ -92,6 +93,7 @@ def prepare_feasible_inputs(
         treatment_costs=treatment_costs,
         budget=budget,
         customer_values=customer_values,
+        max_budget_limit=max_budget_limit,
     )
     cv = np.asarray(customer_values, dtype=np.float64)
 

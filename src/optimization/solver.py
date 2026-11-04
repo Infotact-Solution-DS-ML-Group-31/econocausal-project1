@@ -24,6 +24,7 @@ class SciPyConstrainedSolver(BaseAllocationSolver):
         min_spend_per_user: float = 0.0,
         integer_rounding: bool = True,
         cache: Optional[AllocationCache] = None,
+        max_budget_limit: float = 1_000_000.0,
     ):
         super().__init__(budget=budget, min_spend_per_user=min_spend_per_user)
         if isinstance(objective, str):
@@ -32,6 +33,7 @@ class SciPyConstrainedSolver(BaseAllocationSolver):
             self.objective = objective
         self.integer_rounding = integer_rounding
         self.cache = cache
+        self.max_budget_limit = max_budget_limit
 
     def solve(
         self,
@@ -125,6 +127,7 @@ class SciPyConstrainedSolver(BaseAllocationSolver):
             customer_values=cv,
             budget=self.budget,
             require_positive_net_profit=(self.objective == OptimizationObjective.MAXIMIZE_PROFIT),
+            max_budget_limit=self.max_budget_limit,
         )
 
         te = feasible.treatment_effects
