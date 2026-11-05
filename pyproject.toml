@@ -1,4 +1,3 @@
-
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
@@ -12,11 +11,16 @@ dependencies = [
     "pandas>=2.0",
     "openpyxl>=3.1",
     "matplotlib>=3.8",
+    "scipy>=1.11",
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "scikit-learn>=1.4",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0", 
+    "pytest>=8.0",
+    "httpx>=0.27",
 ]
 
 [tool.setuptools.packages.find]

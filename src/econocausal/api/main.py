@@ -1,0 +1,139 @@
+from __future__ import annotations
+
+from typing import Any
+
+import pandas as pd
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+
+from econocausal.causal.data_contract import validate_causal_data
+from econocausal.optimization.allocate import optimize_allocation
+
+
+app = FastAPI(
+    title="EconoCausal API",
+    description=(
+        "API for causal-data readiness checks and "
+        "budget-constrained offer allocation."
+    ),
+    version="0.1.0",
+)
+
+
+class OfferInput(BaseModel):
+    customer_id: str = Field(min_length=1)
+    offer_id: str = Field(min_length=1)
+    cost: float = Field(gt=0, allow_inf_nan=False)
+    expected_incremental_value: float = Field(allow_inf_nan=False)
+
+
+class AllocationRequest(BaseModel):
+    budget: float = Field(ge=0, allow_inf_nan=False)
+    offers: list[OfferInput] = Field(min_length=1)
+
+
+class CausalReadinessRequest(BaseModel):
+    records: list[dict[str, Any]] = Field(min_length=1)
+    covariates: list[str] = Field(default_factory=list)
+
+
+@app.get("/health")
+def health() -> dict:
+    return {
+        "status": "ok",
+        "service": "econocausal-api",
+    }
+
+
+@app.get("/causal/readiness")
+def causal_readiness() -> dict:
+    """
+    Report the known readiness status of the current project dataset.
+
+    The current historical retail dataset does not contain assigned
+    treatment or exposed non-purchaser records.
+    """
+    return {
+        "causal_estimation_ready": False,
+        "status": "not_ready",
+        "reason": (
+            "The current transaction dataset does not contain "
+            "explicit discount assignment or exposed non-purchaser outcomes."
+        ),
+        "required_data": [
+            "customer_id",
+            "product_id",
+            "treatment",
+            "outcome",
+            "assignment_date",
+            "pre-treatment covariates",
+        ],
+        "warning": (
+            "Observed transaction prices must not be treated as "
+            "randomized discount assignments."
+        ),
+    }
+
+
+@app.post("/causal/validate")
+def validate_causal_records(request: CausalReadinessRequest) -> dict:
+    """
+    Validate the structure of a supplied customer-level causal dataset.
+
+    Passing this check does not prove causal identification.
+    """
+    try:
+        df = pd.DataFrame(request.records)
+        report = validate_causal_data(
+            df,
+            covariates=request.covariates,
+        )
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "valid": report.valid,
+        "rows_checked": report.rows_checked,
+        "errors": report.errors,
+        "warnings": report.warnings,
+        "causal_identification_established": False,
+    }
+
+
+@app.post("/optimization/allocate")
+def allocate_offers(request: AllocationRequest) -> dict:
+    """
+    Allocate offers using externally supplied expected incremental values.
+
+    This endpoint does not estimate treatment effects or uplift.
+    """
+    try:
+        offers_df = pd.DataFrame(
+            [offer.model_dump() for offer in request.offers]
+        )
+
+        result = optimize_allocation(
+            offers=offers_df,
+            budget=request.budget,
+        )
+
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    selected = result.allocations[
+        result.allocations["selected"] == 1
+    ]
+
+    return {
+        "budget": result.budget,
+        "total_cost": result.total_cost,
+        "remaining_budget": result.budget - result.total_cost,
+        "total_expected_incremental_value": result.total_expected_value,
+        "selected_count": result.selected_count,
+        "solver_status": result.solver_status,
+        "allocations": result.allocations.to_dict(orient="records"),
+        "selected_offers": selected.to_dict(orient="records"),
+        "causal_estimates_generated": False,
+    }
