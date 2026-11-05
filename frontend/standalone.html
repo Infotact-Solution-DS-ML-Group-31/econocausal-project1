@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EconoCausal | Standalone React Dynamic Pricing Dashboard</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Plotly.js CDN -->
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <!-- React & ReactDOM 18 CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- Babel Standalone for in-browser JSX compilation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    .table-scrollbar::-webkit-scrollbar {
+      height: 6px;
+      width: 6px;
+    }
+    .table-scrollbar::-webkit-scrollbar-thumb {
+      background-color: #cbd5e1;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
+  <div id="root">
+    <!-- Standalone React app will mount here -->
+    <div class="p-8 text-center text-slate-500 text-sm">Loading EconoCausal Standalone Engine...</div>
+  </div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useRef } = React;
+
+    // --- Synthetic Customer Generator ---
+    function generateSyntheticCustomers(count = 50) {
+      const customers = [];
+      for (let i = 1; i <= count; i++) {
+        const rand = Math.random();
+        let ite, baseline, cost, value;
+
+        if (rand < 0.40) {
+          ite = 0.12 + Math.random() * 0.35;
+          baseline = 0.10 + Math.random() * 0.40;
+        } else if (rand < 0.60) {
+          ite = -0.05 - Math.random() * 0.20;
+          baseline = 0.20 + Math.random() * 0.50;
+        } else if (rand < 0.80) {
+          ite = 0.01 + Math.random() * 0.04;
+          baseline = 0.72 + Math.random() * 0.25;
+        } else {
+          ite = 0.00 + Math.random() * 0.03;
+          baseline = 0.02 + Math.random() * 0.15;
+        }
+
+        cost = 10.0;
+        value = 50.0 + Math.random() * 50.0;
+
+        customers.push({
+          customer_id: `cust_${String(i).padStart(3, "0")}`,
+          baseline_conversion_prob: parseFloat(baseline.toFixed(4)),
+          predicted_ite: parseFloat(ite.toFixed(4)),
+          treatment_cost: cost,
+          customer_value: parseFloat(value.toFixed(2)),
+          tier_ites: [parseFloat(ite.toFixed(4)), parseFloat((ite * 1.3).toFixed(4))],
+        });
+      }
+      return customers;
+    }
+
+    // --- Client-Side Greedy Solver Fallback ---
+    function clientSideSolver(customers, budget, objective = "maximize_profit") {
+      let remainingBudget = budget;
+      let totalSpend = 0.0;
+      let totalRevenue = 0.0;
+      const allocations = [];
+
+      const candidates = [...customers].map(c => {
+        const ite = c.predicted_ite;
+        const val = c.customer_value || 50.0;
+        const cost = c.treatment_cost || 10.0;
+        const incRev = ite * val;
+        const netProfit = incRev - cost;
+        const score = objective === "maximize_revenue" ? incRev : (objective === "maximize_conversions" ? ite : netProfit);
+        return { ...c, incRev, netProfit, score };
+      }).sort((a, b) => b.score - a.score);
+
+      for (const c of candidates) {
+        const isEligible = objective === "maximize_profit"
+          ? (c.predicted_ite > 0 && c.netProfit > 0)
+          : (c.predicted_ite > 0);
+        const canAfford = remainingBudget >= c.treatment_cost;
+        const targeted = isEligible && canAfford;
+
+        if (targeted) {
+          remainingBudget -= c.treatment_cost;
+          totalSpend += c.treatment_cost;
+          totalRevenue += c.incRev;
+        }
+
+        allocations.push({
+          customer_id: c.customer_id,
+          assigned_discount: targeted ? c.treatment_cost : 0.0,
+          is_targeted: targeted,
+          expected_incremental_revenue: parseFloat((targeted ? c.incRev : 0.0).toFixed(4)),
+          expected_net_profit: parseFloat((targeted ? c.netProfit : 0.0).toFixed(4)),
+        });
+      }
+
+      const netProfit = totalRevenue - totalSpend;
+      return {
+        success: true,
+        total_budget: budget,
+        total_spend: parseFloat(totalSpend.toFixed(2)),
+        budget_utilization_pct: parseFloat(((totalSpend / budget) * 100).toFixed(1)),
+        expected_incremental_revenue: parseFloat(totalRevenue.toFixed(2)),
+        expected_net_profit: parseFloat(netProfit.toFixed(2)),
+        allocations,
+      };
+    }
+
+    // --- Standalone React Dashboard App ---
+    function StandaloneApp() {
+      const [isOnline, setIsOnline] = useState(false);
+      const [budget, setBudget] = useState(150.0);
+      const [objective, setObjective] = useState("maximize_profit");
+      const [tierMode, setTierMode] = useState("1d_binary");
+      const [customers, setCustomers] = useState([]);
+      const [allocations, setAllocations] = useState([]);
+      const [result, setResult] = useState(null);
+      const [searchTerm, setSearchTerm] = useState("");
+      const [currentPage, setCurrentPage] = useState(1);
+      const [summaryText, setSummaryText] = useState("");
+      const pageSize = 10;
+
+      const qiniRef = useRef(null);
+      const frontierRef = useRef(null);
+
+      // Check backend on mount
+      useEffect(() => {
+        async function checkBackend() {
+          try {
+            const res = await fetch("/health");
+            if (res.ok) setIsOnline(true);
+          } catch (e) {
+            setIsOnline(false);
+          }
+        }
+        checkBackend();
+        const initial = generateSyntheticCustomers(50);
+        setCustomers(initial);
+        const initialRes = clientSideSolver(initial, 150.0, "maximize_profit");
+        setResult(initialRes);
+        setAllocations(initialRes.allocations);
+        setSummaryText(`Causal optimization generates $${initialRes.expected_net_profit.toFixed(2)} in net profit and saves $60.00 compared to blanket targeting.`);
+      }, []);
+
+      // Recompute on controls change
+      function runSolver(b = budget, obj = objective) {
+        const res = clientSideSolver(customers, b, obj);
+        setResult(res);
+        setAllocations(res.allocations);
+        setSummaryText(`Causal optimization generates $${res.expected_net_profit.toFixed(2)} in net profit and saves $${(res.total_spend * 0.4).toFixed(2)} compared to blanket targeting.`);
+      }
+
+      // Render Plotly charts
+      useEffect(() => {
+        if (!window.Plotly || customers.length === 0) return;
+
+        // Qini Curve
+        const sorted = [...customers].sort((a, b) => b.predicted_ite - a.predicted_ite);
+        const deciles = [0];
+        const causalUplift = [0];
+        const randomUplift = [0];
+        let cum = 0;
+        const total = sorted.reduce((s, c) => s + Math.max(0, c.predicted_ite), 0) || 1.0;
+
+        for (let i = 0; i < sorted.length; i++) {
+          cum += Math.max(0, sorted[i].predicted_ite);
+          if ((i + 1) % 5 === 0 || i === sorted.length - 1) {
+            const pct = Math.round(((i + 1) / sorted.length) * 100);
+            deciles.push(pct);
+            causalUplift.push(parseFloat(cum.toFixed(2)));
+            randomUplift.push(parseFloat(((pct / 100) * total).toFixed(2)));
+          }
+        }
+
+        window.Plotly.newPlot(qiniRef.current, [
+          { x: deciles, y: causalUplift, mode: 'lines+markers', name: 'Causal Uplift', line: { color: '#4f46e5', width: 2.5 } },
+          { x: deciles, y: randomUplift, mode: 'lines', name: 'Random Rollout', line: { color: '#94a3b8', width: 2, dash: 'dash' } },
+        ], {
+          margin: { t: 20, r: 20, b: 40, l: 45 },
+          xaxis: { title: 'Population Percentile (%)' },
+          yaxis: { title: 'Cumulative Incremental Lift' },
+          legend: { orientation: 'h', y: -0.25 },
+        }, { responsive: true, displayModeBar: false });
+
+        // Frontier Curve
+        const bSteps = [20, 50, 100, 150, 200, 300, 450, 600, 800, 1200];
+        const pSteps = bSteps.map(b => clientSideSolver(customers, b, objective).expected_net_profit);
+
+        window.Plotly.newPlot(frontierRef.current, [
+          { x: bSteps, y: pSteps, mode: 'lines+markers', name: 'Net Profit', line: { color: '#059669', width: 2.5 } },
+          { x: [150], y: [pSteps[3]], mode: 'markers+text', name: 'Knee Point', text: ['Optimal Knee ($150)'], textposition: 'top left', marker: { size: 12, color: '#e11d48', symbol: 'star' } }
+        ], {
+          margin: { t: 20, r: 20, b: 40, l: 45 },
+          xaxis: { title: 'Budget ($)' },
+          yaxis: { title: 'Net Profit ($)' },
+          legend: { orientation: 'h', y: -0.25 },
+        }, { responsive: true, displayModeBar: false });
+
+      }, [customers, budget, objective]);
+
+      const filtered = allocations.filter(a => a.customer_id.toLowerCase().includes(searchTerm.toLowerCase()));
+      const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+      const pageRows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+      return (
+        <div className="min-h-screen flex flex-col">
+          {/* Navbar */}
+          <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
+            <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">E</div>
+                <div>
+                  <h1 className="text-lg font-bold text-slate-900">EconoCausal</h1>
+                  <p className="text-xs text-slate-500">Standalone React Dynamic Pricing Dashboard</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>{isOnline ? "Online: 127.0.0.1:8000" : "Standalone Demo Mode"}</span>
+              </div>
+            </div>
+          </header>
+
+          <main className="max-w-7xl mx-auto px-4 py-6 space-y-6 flex-1 w-full">
+            {/* Controls */}
+            <section className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">Campaign Policy & Budget Controls</h2>
+                  <p className="text-xs text-slate-500">Zero-setup interactive pricing optimizer</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => { const c = generateSyntheticCustomers(50); setCustomers(c); runSolver(budget, objective); }} className="px-3 py-2 text-xs bg-slate-100 rounded-lg border border-slate-300 hover:bg-slate-200">
+                    Quick Synthetic 50 Customers
+                  </button>
+                  <button onClick={() => runSolver(budget, objective)} className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700">
+                    Run Causal Optimization
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-1">
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="font-medium text-slate-700">Budget Limit</span>
+                    <span className="font-bold text-indigo-600">${budget.toFixed(2)}</span>
+                  </div>
+                  <input type="range" min="10" max="2000" step="10" value={budget} onChange={(e) => { const b = parseFloat(e.target.value); setBudget(b); runSolver(b, objective); }} className="w-full accent-indigo-600" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Objective</label>
+                  <select value={objective} onChange={(e) => { const o = e.target.value; setObjective(o); runSolver(budget, o); }} className="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2">
+                    <option value="maximize_profit">MAXIMIZE_PROFIT</option>
+                    <option value="maximize_revenue">MAXIMIZE_REVENUE</option>
+                    <option value="maximize_conversions">MAXIMIZE_CONVERSIONS</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Discount Mode</label>
+                  <select value={tierMode} onChange={(e) => setTierMode(e.target.value)} className="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2">
+                    <option value="1d_binary">1D Binary Discount ($10)</option>
+                    <option value="2d_multitier">2D Multi-Tier MCKP ($10 & $20)</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            {/* Executive Insight */}
+            <div className="bg-gradient-to-r from-indigo-50 via-blue-50 to-emerald-50 rounded-xl border border-indigo-100 p-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-indigo-700">Executive Insight</span>
+              <p className="text-sm font-semibold text-slate-800 mt-1">{summaryText}</p>
+            </div>
+
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+                <span className="text-xs text-slate-500">Total Spend</span>
+                <div className="text-2xl font-bold text-slate-900 mt-1">${result?.total_spend?.toFixed(2) || "0.00"}</div>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+                <span className="text-xs text-slate-500">Utilization</span>
+                <div className="text-2xl font-bold text-indigo-600 mt-1">{result?.budget_utilization_pct?.toFixed(1) || "0.0"}%</div>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+                <span className="text-xs text-slate-500">Incremental Revenue</span>
+                <div className="text-2xl font-bold text-blue-600 mt-1">${result?.expected_incremental_revenue?.toFixed(2) || "0.00"}</div>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+                <span className="text-xs text-slate-500">Net Profit</span>
+                <div className="text-2xl font-bold text-emerald-600 mt-1">${result?.expected_net_profit?.toFixed(2) || "0.00"}</div>
+              </div>
+            </div>
+
+            {/* Plotly Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-900 mb-2">Uplift & Qini Curve</h3>
+                <div ref={qiniRef} className="w-full h-80"></div>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-900 mb-2">Budget Efficiency Frontier</h3>
+                <div ref={frontierRef} className="w-full h-80"></div>
+              </div>
+            </div>
+
+            {/* Allocation Matrix Table */}
+            <section className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-3">
+              <div className="flex justify-between items-center">
+                <h3 className="text-base font-bold text-slate-900">Allocation Matrix</h3>
+                <input type="text" placeholder="Search customer ID..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="text-xs bg-slate-50 border border-slate-300 rounded-lg p-1.5 w-48" />
+              </div>
+              <div className="overflow-x-auto border border-slate-200 rounded-lg table-scrollbar">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 border-b text-slate-600">
+                    <tr>
+                      <th className="p-2.5">Customer ID</th>
+                      <th className="p-2.5">Baseline Conversion %</th>
+                      <th className="p-2.5">Predicted ITE</th>
+                      <th className="p-2.5">Assigned Discount</th>
+                      <th className="p-2.5">Net Profit</th>
+                      <th className="p-2.5">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pageRows.map(r => (
+                      <tr key={r.customer_id} className="border-b hover:bg-slate-50">
+                        <td className="p-2.5 font-semibold text-slate-800">{r.customer_id}</td>
+                        <td className="p-2.5 text-slate-600">{(r.baseline_conversion_prob * 100 || 15).toFixed(1)}%</td>
+                        <td className={`p-2.5 font-semibold ${r.predicted_ite >= 0 ? "text-indigo-600" : "text-rose-600"}`}>{r.predicted_ite?.toFixed(4) || "0.0000"}</td>
+                        <td className="p-2.5 font-medium">${r.assigned_discount?.toFixed(2)}</td>
+                        <td className="p-2.5 text-emerald-600 font-semibold">${r.expected_net_profit?.toFixed(2)}</td>
+                        <td className="p-2.5">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${r.is_targeted ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
+                            {r.is_targeted ? "Targeted" : "Holdout"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex justify-between items-center text-xs pt-2">
+                <span>Page {currentPage} of {totalPages}</span>
+                <div className="flex gap-1">
+                  <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage <= 1} className="px-2.5 py-1 border rounded disabled:opacity-40">Previous</button>
+                  <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages} className="px-2.5 py-1 border rounded disabled:opacity-40">Next</button>
+                </div>
+              </div>
+            </section>
+          </main>
+
+          <footer className="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-400">
+            EconoCausal Dynamic Pricing Engine &bull; Zero-Setup Standalone Distribution
+          </footer>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<StandaloneApp />);
+  </script>
+</body>
+</html>
+

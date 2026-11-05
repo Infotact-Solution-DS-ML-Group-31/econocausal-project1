@@ -19,5 +19,6 @@
 | `POST` | `/api/v1/simulate-confidence` | Optimization & Allocation | Run Monte Carlo simulation to quantify policy risk and confidence bounds |
 | `POST` | `/api/v1/recommend-budget` | Optimization & Allocation | Detect optimal budget knee point and analyze diminishing returns |
 | `GET` | `/` | General | Root service metadata and online status |
+| `GET` | `/dashboard` | General | Serve the interactive Plotly & Tailwind EconoCausal dashboard. |
 | `GET` | `/health` | Monitoring | Liveness probe for health monitoring |
 | `GET` | `/ready` | Monitoring | Readiness probe verifying subsystem operational readiness |

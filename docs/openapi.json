@@ -533,6 +533,21 @@
         }
       }
     },
+    "/dashboard": {
+      "get": {
+        "tags": [
+          "General"
+        ],
+        "summary": "Get Dashboard",
+        "description": "Serve the interactive Plotly & Tailwind EconoCausal dashboard.",
+        "operationId": "get_dashboard_dashboard_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
