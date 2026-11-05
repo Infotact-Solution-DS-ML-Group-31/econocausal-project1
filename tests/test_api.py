@@ -148,3 +148,48 @@ def test_optimizer_rejects_duplicate_offer_ids():
     )
 
     assert response.status_code == 400
+
+def test_uplift_endpoint_returns_metrics():
+    from fastapi.testclient import TestClient
+    from econocausal.api.main import app
+
+    client = TestClient(app)
+
+    response = client.post(
+        "/causal/uplift",
+        json={
+            "treatment": [1, 1, 1, 1, 0, 0, 0, 0],
+            "outcome": [1, 1, 0, 1, 0, 0, 1, 0],
+            "predicted_uplift": [
+                0.9, 0.8, 0.7, 0.6,
+                0.4, 0.3, 0.2, 0.1
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+
+    result = response.json()
+
+    assert "auuc" in result
+    assert "qini_coefficient" in result
+    assert result["n_observations"] == 8
+    assert result["causal_identification_established"] is False
+
+
+def test_uplift_endpoint_rejects_invalid_treatment():
+    from fastapi.testclient import TestClient
+    from econocausal.api.main import app
+
+    client = TestClient(app)
+
+    response = client.post(
+        "/causal/uplift",
+        json={
+            "treatment": [0.5, 1, 1, 0],
+            "outcome": [1, 1, 0, 0],
+            "predicted_uplift": [0.9, 0.8, 0.7, 0.6],
+        },
+    )
+
+    assert response.status_code == 400

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from econocausal.causal.data_contract import validate_causal_data
 from econocausal.optimization.allocate import optimize_allocation
+from econocausal.causal.uplift import evaluate_uplift
 
 
 app = FastAPI(
@@ -35,6 +36,11 @@ class AllocationRequest(BaseModel):
 class CausalReadinessRequest(BaseModel):
     records: list[dict[str, Any]] = Field(min_length=1)
     covariates: list[str] = Field(default_factory=list)
+
+class UpliftRequest(BaseModel):
+    treatment: list[float] = Field(min_length=1)
+    outcome: list[float] = Field(min_length=1)
+    predicted_uplift: list[float] = Field(min_length=1)
 
 
 @app.get("/health")
@@ -96,6 +102,36 @@ def validate_causal_records(request: CausalReadinessRequest) -> dict:
         "rows_checked": report.rows_checked,
         "errors": report.errors,
         "warnings": report.warnings,
+        "causal_identification_established": False,
+    }
+
+@app.post("/causal/uplift")
+def evaluate_uplift_endpoint(request: UpliftRequest) -> dict:
+    """
+    Evaluate predicted uplift rankings using Qini and AUUC metrics.
+
+    Requires valid treatment assignment and outcome data.
+    This endpoint does not establish causal identification.
+    """
+    try:
+        result = evaluate_uplift(
+            treatment=request.treatment,
+            outcome=request.outcome,
+            predicted_uplift=request.predicted_uplift,
+        )
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "auuc": result.auuc,
+        "qini_coefficient": result.qini_coefficient,
+        "random_auuc": result.random_auuc,
+        "n_observations": result.n_observations,
+        "n_treated": result.n_treated,
+        "n_control": result.n_control,
+        "curve": result.curve,
+        "random_curve": result.random_curve,
+        "warnings": result.warnings,
         "causal_identification_established": False,
     }
 
