@@ -3,8 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field
+from fastapi.middleware.cors import CORSMiddleware
 
 from econocausal.causal.data_contract import validate_causal_data
 from econocausal.optimization.allocate import optimize_allocation
@@ -19,6 +20,13 @@ app = FastAPI(
         "budget-constrained offer allocation."
     ),
     version="0.1.0",
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -203,4 +211,103 @@ def allocate_offers(request: AllocationRequest) -> dict:
         "allocations": result.allocations.to_dict(orient="records"),
         "selected_offers": selected.to_dict(orient="records"),
         "causal_estimates_generated": False,
+    }
+
+
+@app.post("/data/inspect-csv")
+def inspect_csv(file: UploadFile = File(...)) -> dict:
+    """
+    Inspect a CSV in chunks without loading the entire dataset
+    into memory. Reports structural causal-schema availability,
+    not causal identification.
+    """
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(
+            status_code=400,
+            detail="Please upload a file with a .csv extension.",
+        )
+
+    required_fields = {
+        "customer_id",
+        "product_id",
+        "treatment",
+        "outcome",
+        "assignment_date",
+    }
+
+    total_rows = 0
+    columns = None
+    missing_counts = None
+    inferred_types = {}
+
+    try:
+        for chunk in pd.read_csv(
+            file.file,
+            chunksize=100_000,
+            low_memory=False,
+        ):
+            if columns is None:
+                columns = list(chunk.columns)
+                missing_counts = {
+                    column: 0 for column in columns
+                }
+                inferred_types = {
+                    column: str(chunk[column].dtype)
+                    for column in columns
+                }
+
+            total_rows += len(chunk)
+
+            chunk_missing = chunk.isna().sum()
+            for column in columns:
+                missing_counts[column] += int(
+                    chunk_missing[column]
+                )
+
+    except pd.errors.EmptyDataError:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded CSV is empty or has no header.",
+        )
+    except (pd.errors.ParserError, UnicodeDecodeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not parse CSV: {str(exc)}",
+        )
+    finally:
+        file.file.close()
+
+    if not columns or total_rows == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded CSV contains no data rows.",
+        )
+
+    missing_fields = sorted(required_fields - set(columns))
+
+    missing_summary = {
+        column: {
+            "missing_count": count,
+            "missing_percentage": round(
+                (count / total_rows) * 100, 2
+            ),
+        }
+        for column, count in missing_counts.items()
+    }
+
+    return {
+        "filename": file.filename,
+        "total_rows": total_rows,
+        "total_columns": len(columns),
+        "columns": columns,
+        "column_types_sample": inferred_types,
+        "missing_values": missing_summary,
+        "causal_schema_present": len(missing_fields) == 0,
+        "missing_causal_fields": missing_fields,
+        "causal_identification_established": False,
+        "warning": (
+            "Column availability and structural inspection do not "
+            "establish random assignment, absence of confounding, "
+            "overlap, or causal identification."
+        ),
     }
