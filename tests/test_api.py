@@ -193,3 +193,82 @@ def test_uplift_endpoint_rejects_invalid_treatment():
     )
 
     assert response.status_code == 400
+
+
+def test_drift_endpoint_detects_numeric_and_categorical_drift():
+    response = client.post(
+        "/monitoring/drift",
+        json={
+            "reference_records": [
+                {"age": 20, "segment": "A"},
+                {"age": 25, "segment": "A"},
+                {"age": 30, "segment": "A"},
+                {"age": 35, "segment": "B"},
+                {"age": 40, "segment": "B"},
+                {"age": 45, "segment": "B"},
+            ],
+            "current_records": [
+                {"age": 55, "segment": "B"},
+                {"age": 60, "segment": "B"},
+                {"age": 65, "segment": "B"},
+                {"age": 70, "segment": "B"},
+                {"age": 75, "segment": "A"},
+                {"age": 80, "segment": "A"},
+            ],
+            "features": ["age", "segment"],
+            "bins": 5,
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["status"] in ["warning", "drift_detected"]
+    assert data["features_checked"] == 2
+    assert len(data["results"]) == 2
+
+    feature_types = {
+        result["feature"]: result["feature_type"]
+        for result in data["results"]
+    }
+
+    assert feature_types["age"] == "numeric"
+    assert feature_types["segment"] == "categorical"
+
+
+def test_drift_endpoint_rejects_empty_reference_records():
+    response = client.post(
+        "/monitoring/drift",
+        json={
+            "reference_records": [],
+            "current_records": [{"age": 30}],
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_drift_endpoint_rejects_empty_current_records():
+    response = client.post(
+        "/monitoring/drift",
+        json={
+            "reference_records": [{"age": 30}],
+            "current_records": [],
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_drift_endpoint_rejects_missing_features():
+    response = client.post(
+        "/monitoring/drift",
+        json={
+            "reference_records": [{"age": 20}],
+            "current_records": [{"income": 5000}],
+            "features": ["age"],
+        },
+    )
+
+    assert response.status_code == 400
+    assert "Missing features" in response.json()["detail"]

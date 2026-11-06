@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from econocausal.causal.data_contract import validate_causal_data
 from econocausal.optimization.allocate import optimize_allocation
 from econocausal.causal.uplift import evaluate_uplift
+from econocausal.monitoring.drift import detect_drift
 
 
 app = FastAPI(
@@ -41,6 +42,12 @@ class UpliftRequest(BaseModel):
     treatment: list[float] = Field(min_length=1)
     outcome: list[float] = Field(min_length=1)
     predicted_uplift: list[float] = Field(min_length=1)
+
+class DriftRequest(BaseModel):
+    reference_records: list[dict[str, Any]] = Field(min_length=1)
+    current_records: list[dict[str, Any]] = Field(min_length=1)
+    features: list[str] | None = None
+    bins: int = Field(default=10, ge=2, le=100)
 
 
 @app.get("/health")
@@ -134,6 +141,30 @@ def evaluate_uplift_endpoint(request: UpliftRequest) -> dict:
         "warnings": result.warnings,
         "causal_identification_established": False,
     }
+
+@app.post("/monitoring/drift")
+def detect_drift_endpoint(request: DriftRequest) -> dict:
+    """
+    Compare reference and current feature distributions.
+
+    PSI measures distribution changes. It does not establish
+    causal validity or prove model performance degradation.
+    """
+    try:
+        reference_df = pd.DataFrame(request.reference_records)
+        current_df = pd.DataFrame(request.current_records)
+
+        report = detect_drift(
+            reference=reference_df,
+            current=current_df,
+            features=request.features,
+            bins=request.bins,
+        )
+
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return report.to_dict()
 
 
 @app.post("/optimization/allocate")
