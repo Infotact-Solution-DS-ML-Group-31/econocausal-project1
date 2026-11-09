@@ -11,6 +11,12 @@ from econocausal.causal.data_contract import validate_causal_data
 from econocausal.optimization.allocate import optimize_allocation
 from econocausal.causal.uplift import evaluate_uplift
 from econocausal.monitoring.drift import detect_drift
+from econocausal.causal.psm import (
+    estimate_propensity_scores,
+    check_common_support,
+    nearest_neighbour_match,
+    evaluate_matched_sample,
+)
 
 
 app = FastAPI(
@@ -45,6 +51,16 @@ class AllocationRequest(BaseModel):
 class CausalReadinessRequest(BaseModel):
     records: list[dict[str, Any]] = Field(min_length=1)
     covariates: list[str] = Field(default_factory=list)
+
+class PSMRequest(BaseModel):
+    records: list[dict[str, Any]] = Field(min_length=1)
+    covariates: list[str] = Field(min_length=1)
+    caliper: float | None = Field(
+        default=None,
+        gt=0,
+        allow_inf_nan=False,
+    )
+    replacement: bool = False
 
 class UpliftRequest(BaseModel):
     treatment: list[float] = Field(min_length=1)
@@ -118,6 +134,81 @@ def validate_causal_records(request: CausalReadinessRequest) -> dict:
         "errors": report.errors,
         "warnings": report.warnings,
         "causal_identification_established": False,
+    }
+
+
+@app.post("/causal/psm")
+def evaluate_psm_endpoint(request: PSMRequest) -> dict:
+    """
+    Estimate propensity scores, identify common support, perform
+    nearest-neighbour matching, and evaluate the matched sample.
+
+    This endpoint reports an observational matched-sample estimate.
+    It does not establish causal identification.
+    """
+    try:
+        df = pd.DataFrame(request.records)
+
+        propensity_result = estimate_propensity_scores(
+            df=df,
+            covariates=request.covariates,
+        )
+
+        support_result = check_common_support(
+            propensity_scores=propensity_result.propensity_scores,
+            treatment=df["treatment"].to_numpy(),
+        )
+
+        match_result = nearest_neighbour_match(
+            propensity_scores=propensity_result.propensity_scores,
+            treatment=df["treatment"].to_numpy(),
+            caliper=request.caliper,
+            replacement=request.replacement,
+            in_support=support_result.in_support,
+        )
+
+        report = evaluate_matched_sample(
+            df=df,
+            match_result=match_result,
+            covariates=request.covariates,
+        )
+
+    except (TypeError, ValueError, KeyError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "n_observations": propensity_result.n_observations,
+        "n_treated": propensity_result.n_treated,
+        "n_control": propensity_result.n_control,
+        "common_support": {
+            "lower_bound": support_result.lower_bound,
+            "upper_bound": support_result.upper_bound,
+            "n_in_support": support_result.n_in_support,
+            "n_outside_support": support_result.n_outside_support,
+            "n_treated_in_support": support_result.n_treated_in_support,
+            "n_control_in_support": support_result.n_control_in_support,
+        },
+        "matching": {
+            "n_matched": match_result.n_matched,
+            "n_unmatched_treated": match_result.n_unmatched_treated,
+            "n_unique_controls_used": match_result.n_unique_controls_used,
+            "replacement": match_result.replacement,
+            "caliper": match_result.caliper,
+            "mean_matching_distance": report.mean_matching_distance,
+            "treated_indices": match_result.treated_indices.tolist(),
+            "control_indices": match_result.control_indices.tolist(),
+        },
+        "att": report.att,
+        "smd_before": report.smd_before,
+        "smd_after": report.smd_after,
+        "balance_improved": report.balance_improved,
+        "causal_identification_established": False,
+        "warning": (
+            "The ATT is an observational matched-sample estimate. "
+            "Matching does not eliminate unobserved confounding or "
+            "establish causal identification. Covariates must be "
+            "measured before treatment assignment."
+        ),
     }
 
 @app.post("/causal/uplift")

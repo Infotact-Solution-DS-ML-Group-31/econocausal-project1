@@ -272,3 +272,54 @@ def test_drift_endpoint_rejects_missing_features():
 
     assert response.status_code == 400
     assert "Missing features" in response.json()["detail"]
+
+
+def test_psm_endpoint_returns_matching_and_balance_metrics():
+    response = client.post(
+        "/causal/psm",
+        json={
+            "records": [
+                {"treatment": 1, "outcome": 1, "age": 25},
+                {"treatment": 1, "outcome": 0, "age": 30},
+                {"treatment": 1, "outcome": 1, "age": 35},
+                {"treatment": 1, "outcome": 0, "age": 40},
+                {"treatment": 0, "outcome": 0, "age": 26},
+                {"treatment": 0, "outcome": 0, "age": 31},
+                {"treatment": 0, "outcome": 0, "age": 36},
+                {"treatment": 0, "outcome": 0, "age": 41},
+            ],
+            "covariates": ["age"],
+            "replacement": False,
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["n_observations"] == 8
+    assert data["n_treated"] == 4
+    assert data["n_control"] == 4
+    assert "common_support" in data
+    assert "matching" in data
+    assert "att" in data
+    assert "smd_before" in data
+    assert "smd_after" in data
+    assert data["matching"]["n_matched"] > 0
+    assert data["causal_identification_established"] is False
+
+
+def test_psm_endpoint_rejects_missing_covariate():
+    response = client.post(
+        "/causal/psm",
+        json={
+            "records": [
+                {"treatment": 1, "outcome": 1, "age": 25},
+                {"treatment": 0, "outcome": 0, "age": 30},
+            ],
+            "covariates": ["income"],
+        },
+    )
+
+    assert response.status_code == 400
+    assert "Missing required columns" in response.json()["detail"]

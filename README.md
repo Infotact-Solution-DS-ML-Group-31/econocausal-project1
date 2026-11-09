@@ -173,6 +173,19 @@ The estimator's output depends on the partially linear treatment-effect assumpti
 
 A structurally valid dataset does not automatically establish causal identification. Randomization, confounding control, overlap, and other identification assumptions require separate justification.
 
+### Propensity Score Matching
+
+The causal module implements Propensity Score Matching (PSM) using logistic regression to estimate propensity scores from observed covariates.
+
+The workflow:
+1. Estimates each observation's propensity score.
+2. Checks common support between treated and control groups.
+3. Performs nearest-neighbour matching, with configurable replacement and an optional caliper.
+4. Calculates the Average Treatment Effect on the Treated (ATT) for the matched sample.
+5. Reports standardized mean differences (SMD) before and after matching to assess observed covariate balance.
+
+Matching can improve balance on observed covariates, but it cannot eliminate unobserved confounding. The matched-sample ATT must therefore be interpreted as an observational estimate, not proof of causal identification.
+
 ### Uplift Evaluation
 
 The uplift module evaluates supplied treatment-effect rankings and calculates cumulative Qini-related metrics, including AUUC and a Qini coefficient.
@@ -224,6 +237,7 @@ Implemented endpoints:
 | GET | `/health` | Backend health check |
 | GET | `/causal/readiness` | Report causal-data readiness requirements |
 | POST | `/causal/validate` | Validate submitted causal data structure |
+| POST | `/causal/psm` | Estimate propensity scores, check common support, perform nearest-neighbour matching, and report matched-sample balance and ATT |
 | POST | `/causal/uplift` | Evaluate supplied uplift scores |
 | POST | `/optimization/allocate` | Optimize offer allocation |
 | POST | `/monitoring/drift` | Detect feature distribution drift |
@@ -271,7 +285,7 @@ Run backend tests from the repository root:
 pytest -q
 ```
 
-The current verified backend test result is **80 passed**.
+The current verified backend test result is **117 passed**.
 
 Run frontend linting and production build:
 
@@ -300,7 +314,7 @@ Consequently, causal effect estimates should only be interpreted when suitable t
 ## 14. Future Improvements
 
 - Integrate a validated customer-level promotional campaign dataset.
-- Add explicit propensity-score matching and balance diagnostics.
+- Add uncertainty intervals and sensitivity analysis for matched-sample ATT estimates.
 - Strengthen causal identification and overlap diagnostics.
 - Evaluate estimator robustness using additional refutation methods.
 - Add validated heterogeneous treatment-effect estimation.
