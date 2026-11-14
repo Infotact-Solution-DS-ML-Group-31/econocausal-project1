@@ -20,3 +20,17 @@ Thumbs.db
 
 # Generated outputs
 *.log
+
+# Python packaging
+*.egg-info/
+.pytest_cache/
+
+# Local datasets
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Frontend test and dataset files
+frontend/retail_sales.csv
+frontend/causal_test.csv
